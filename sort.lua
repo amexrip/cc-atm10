@@ -1,20 +1,16 @@
 -- ATM10 chest sorter for CC:Tweaked mining turtles.
 --
--- HOME: stand next to the unsorted chest, FACING it (turtle.suck() from the front).
--- The four dump chests are a 1-deep trench along a path to your LEFT.
--- While walking that path, those chests are on your RIGHT.
--- Turtles do not fall, so the turtle steps into the air above each chest and dropDown().
---
--- If it walks the wrong way, set PATH_TURN to "right".
--- If it hovers over grass instead of a chest, set DIST_TO_FIRST to 0.
--- If the chests are on the other side of the path, set HOP_TURN to "left".
+-- HOME: stand next to the unsorted chest, FACING it.
+-- The four dump chests should be in a line to your left or right
+-- (sunken is fine -- turtles float and dropDown into them).
+-- First run looks left, then right, until it finds a chest below.
 
-local PATH_TURN      = "left"   -- "left" or "right" - turn this way from the input chest
-local HOP_TURN       = "right"  -- side the dump chests are on while walking the path
-local DIST_TO_FIRST  = 1        -- steps along the path to sit beside chest 1
-local CHEST_COUNT    = 4
-local WAIT_EMPTY     = 8        -- seconds to wait when the input chest is empty
-local FUEL_MIN       = 80
+local PATH_TURN = nil      -- set after the turtle finds the dump row
+local DIST_TO_FIRST = nil  -- steps from home onto dump chest 1
+local CHEST_COUNT = 4
+local WAIT_EMPTY = 8
+local FUEL_MIN = 80
+local FIND_MAX = 4         -- how far to walk looking for chest 1
 
 -- ---------------------------------------------------------------------------
 -- Movement helpers
@@ -267,62 +263,79 @@ local function isChestBelow()
 end
 
 -- ---------------------------------------------------------------------------
--- Route: home -> each dump chest -> home
+-- Route: home -> walk on top of dump chests 1-4 -> home
 -- ---------------------------------------------------------------------------
 
-local function hopOntoChest()
-    if HOP_TURN == "none" then return end
-    turn(HOP_TURN)
-    moveForward()
-end
-
-local function hopBackToPath()
-    if HOP_TURN == "none" then return end
-    moveBack()
-    turnOpposite(HOP_TURN)
-end
-
-local function stepsAlongPath(chestIndex)
-    return DIST_TO_FIRST + (chestIndex - 1)
-end
-
-local function rewindHome(chestIndex)
-    for _ = 1, stepsAlongPath(chestIndex) do
+local function goHomeFrom(chestIndex)
+    local steps = DIST_TO_FIRST + (chestIndex - 1)
+    for _ = 1, steps do
         moveBack()
     end
     turnOpposite(PATH_TURN)
 end
 
-local function sortTrip()
-    turn(PATH_TURN)
-
+-- Precondition: already standing above chest 1, facing chest 4.
+local function dumpAlongRow()
     for chest = 1, CHEST_COUNT do
-        local steps = (chest == 1) and DIST_TO_FIRST or 1
-        for _ = 1, steps do
+        if chest > 1 then
             moveForward()
         end
-
-        hopOntoChest()
-
         local ok, below = isChestBelow()
         if not ok then
             print("Chest " .. chest .. ": no chest below, found " .. tostring(below))
-            print("Fix PATH_TURN / HOP_TURN / DIST_TO_FIRST at the top of sort.lua")
-            hopBackToPath()
-            rewindHome(chest)
+            goHomeFrom(chest)
             return false
         end
-
         if hasCategory(chest) then
             print("Dropping " .. CHEST_NAME[chest] .. " into chest " .. chest)
             dropCategoryDown(chest)
         end
+    end
+    goHomeFrom(CHEST_COUNT)
+    return true
+end
 
-        hopBackToPath()
+-- Face dir, walk until a chest is below, or rewind and face the input again.
+local function tryFindRow(dir)
+    turn(dir)
+    if select(1, isChestBelow()) then
+        PATH_TURN = dir
+        DIST_TO_FIRST = 0
+        return true
+    end
+    for i = 1, FIND_MAX do
+        moveForward()
+        if select(1, isChestBelow()) then
+            PATH_TURN = dir
+            DIST_TO_FIRST = i
+            return true
+        end
+    end
+    for _ = 1, FIND_MAX do
+        moveBack()
+    end
+    turnOpposite(dir)
+    return false
+end
+
+local function sortTrip()
+    if PATH_TURN then
+        turn(PATH_TURN)
+        for _ = 1, DIST_TO_FIRST do
+            moveForward()
+        end
+        return dumpAlongRow()
     end
 
-    rewindHome(CHEST_COUNT)
-    return true
+    print("Looking for dump chests...")
+    if tryFindRow("left") or tryFindRow("right") then
+        print("Row is " .. PATH_TURN .. ", chest 1 is " .. DIST_TO_FIRST .. " step(s)")
+        return dumpAlongRow()
+    end
+    print("Could not find dump chests under me.")
+    print("Face the unsorted chest. Put the 4 dump chests")
+    print("in a line to your left or right (sunken is OK).")
+    return false
 end
 
 -- ---------------------------------------------------------------------------
