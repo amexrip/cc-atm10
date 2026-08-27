@@ -320,7 +320,17 @@ def guess_urls() -> list[str]:
 def main() -> None:
     if shutil.which("ffmpeg") is None:
         raise SystemExit("ffmpeg is required")
-    httpd = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
+    try:
+        httpd = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
+    except OSError as exc:
+        if getattr(exc, "errno", None) == 98:
+            print(f"Port {PORT} is already in use.")
+            print("The converter is probably already running. Use:")
+            for u in guess_urls():
+                print("  " + u)
+            print("If that is a leftover process:  fuser -k 8765/tcp")
+            return
+        raise
     print("ytcc converter ready")
     print("From the ComputerCraft computer use the Tailscale URL if LAN is blocked:")
     for u in guess_urls():
