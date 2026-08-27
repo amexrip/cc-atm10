@@ -1,13 +1,13 @@
 -- ATM10 chest sorter for CC:Tweaked mining turtles.
 --
 -- HOME: stand next to the unsorted chest, FACING it.
--- The four dump chests should be in a line to your left or right
--- (sunken is fine -- turtles float and dropDown into them).
+-- Dump chests 1-6 in a line to your left or right (sunken is fine).
+-- 1 dirt  2 cobble  3 stone  4 ores/gems  5-6 everything else
 -- First run looks left, then right, until it finds a chest below.
 
 local PATH_TURN = nil      -- set after the turtle finds the dump row
 local DIST_TO_FIRST = nil  -- steps from home onto dump chest 1
-local CHEST_COUNT = 4
+local CHEST_COUNT = 6
 local WAIT_EMPTY = 8
 local FUEL_MIN = 80
 local FIND_MAX = 4         -- how far to walk looking for chest 1
@@ -86,21 +86,45 @@ local function hasTagPrefix(detail, prefix)
     return false
 end
 
+-- Gems and fortune drops from ores (diamond, not diamond_ore).
+local ORE_DROPS = {
+    diamond = true,
+    emerald = true,
+    coal = true,
+    redstone = true,
+    lapis_lazuli = true,
+    quartz = true,
+    nether_quartz = true,
+    amethyst_shard = true,
+    glowstone_dust = true,
+    glowstone = true,
+    netherite_scrap = true,
+    ancient_debris = true,
+    fluorite = true,
+    certus_quartz_crystal = true,
+    charged_certus_quartz_crystal = true,
+}
+
 local function isOre(detail)
     if hasTag(detail, "c:ores") then return true end
     if hasTagPrefix(detail, "c:ores/") then return true end
-    if hasTagPrefix(detail, "c:raw_materials") then return true end
     if hasTag(detail, "c:raw_materials") then return true end
+    if hasTagPrefix(detail, "c:raw_materials") then return true end
+    if hasTag(detail, "c:gems") then return true end
+    if hasTagPrefix(detail, "c:gems/") then return true end
     local n = itemPart(detail.name)
+    if ORE_DROPS[n] then return true end
     if n:find("_ore", 1, true) or n:find("^ore") then return true end
     if n:find("ancient_debris", 1, true) then return true end
     if n:find("uraninite", 1, true) then return true end
+    if n:find("netherite_scrap", 1, true) then return true end
     if n:find("^raw_") or n:find("_raw_", 1, true) or n:match("_raw$") then
         return true
     end
+    if n:find("_gem", 1, true) then return true end
     if n:find("allthemodium", 1, true) or n:find("vibranium", 1, true) or n:find("unobtainium", 1, true) then
         if n:find("ingot") or n:find("nugget") or n:find("dust") or n:find("gear")
-            or n:find("plate") or n:find("rod") or n:find("block") then
+            or n:find("plate") or n:find("rod") then
             return false
         end
         return true
@@ -166,15 +190,22 @@ local function isOtherStone(detail)
 end
 
 local function classify(detail)
-    if not detail or not detail.name then return nil end
+    if not detail or not detail.name then return 5 end
     if isOre(detail) then return 4 end
     if isDirt(detail) then return 1 end
     if isCobble(detail) then return 2 end
     if isOtherStone(detail) then return 3 end
-    return nil
+    return 5
 end
 
-local CHEST_NAME = { "dirt", "cobblestone", "stone extras", "ores" }
+local CHEST_NAME = {
+    "dirt",
+    "cobblestone",
+    "stone extras",
+    "ores",
+    "unfiltered",
+    "unfiltered",
+}
 
 -- ---------------------------------------------------------------------------
 -- Inventory
@@ -233,23 +264,11 @@ local function dropCategoryDown(cat)
     return dropped, true
 end
 
-local function returnUnknowns()
-    local any = false
-    for slot = 1, 16 do
-        if turtle.getItemCount(slot) > 0 then
-            local detail = getDetail(slot)
-            if classify(detail) == nil then
-                turtle.select(slot)
-                print("Unknown, back to input: " .. (detail and detail.name or "?"))
-                if not turtle.drop() then
-                    print("Input chest can't take leftovers")
-                    return
-                end
-                any = true
-            end
-        end
+local function dropUnfiltered()
+    if hasCategory(5) then
+        print("Dropping unfiltered")
+        dropCategoryDown(5)
     end
-    return any
 end
 
 local function isChestBelow()
@@ -263,7 +282,7 @@ local function isChestBelow()
 end
 
 -- ---------------------------------------------------------------------------
--- Route: home -> walk on top of dump chests 1-4 -> home
+-- Route: home -> walk on top of dump chests 1-6 -> home
 -- ---------------------------------------------------------------------------
 
 local function goHomeFrom(chestIndex)
@@ -274,7 +293,7 @@ local function goHomeFrom(chestIndex)
     turnOpposite(PATH_TURN)
 end
 
--- Precondition: already standing above chest 1, facing chest 4.
+-- Precondition: already standing above chest 1, facing chest 6.
 local function dumpAlongRow()
     for chest = 1, CHEST_COUNT do
         if chest > 1 then
@@ -286,9 +305,13 @@ local function dumpAlongRow()
             goHomeFrom(chest)
             return false
         end
-        if hasCategory(chest) then
-            print("Dropping " .. CHEST_NAME[chest] .. " into chest " .. chest)
-            dropCategoryDown(chest)
+        if chest <= 4 then
+            if hasCategory(chest) then
+                print("Dropping " .. CHEST_NAME[chest] .. " into chest " .. chest)
+                dropCategoryDown(chest)
+            end
+        else
+            dropUnfiltered()
         end
     end
     goHomeFrom(CHEST_COUNT)
@@ -333,7 +356,7 @@ local function sortTrip()
         return dumpAlongRow()
     end
     print("Could not find dump chests under me.")
-    print("Face the unsorted chest. Put the 4 dump chests")
+    print("Face the unsorted chest. Put the 6 dump chests")
     print("in a line to your left or right (sunken is OK).")
     return false
 end
@@ -346,8 +369,8 @@ term.clear()
 term.setCursorPos(1, 1)
 print("ATM10 sorter")
 print("Facing unsorted chest")
-print("1 dirt  2 cobble")
-print("3 stone 4 ores")
+print("1 dirt  2 cobble  3 stone")
+print("4 ores  5-6 extras")
 print("")
 
 refuelIfNeeded()
@@ -374,7 +397,6 @@ while true do
             print("Paused. Fix layout, then rerun.")
             return
         end
-        returnUnknowns()
         if emptySlots() < 16 then
             print("Still holding sorted items (a dump chest may be full)")
             sleep(5)
