@@ -46,6 +46,17 @@ local function prompt(label)
     return read()
 end
 
+local function looksLikeConverter(s)
+    s = (s or ""):gsub("^%s+", ""):gsub("%s+$", ""):gsub("/+$", "")
+    local low = s:lower()
+    if s == "" then return false end
+    if low == "play" or low == "setup" or low == "ytplay" then return false end
+    if low:find("youtube.com", 1, true) or low:find("youtu.be", 1, true) then
+        return false
+    end
+    return low:find("^https?://") ~= nil
+end
+
 if not http then
     printError("Enable http in ComputerCraft.")
     return
@@ -75,35 +86,42 @@ local function monLine(y, text, color)
     monitor.write(tostring(text):sub(1, w))
 end
 
+local args = { ... }
+local arg1 = args[1]
 local base = settings.get(SETTINGS_KEY)
-local arg1 = ...
+
 local function explainHttpError(err)
     err = tostring(err or "")
     printError("Cannot reach converter: " .. err)
     if err:lower():find("domain not permitted", 1, true) then
-        print("CC blocked that host. Do not use 10.x, 192.168.x, 127.x,")
-        print("or Tailscale 100.x unless you allow it in")
-        print("serverconfig/computercraft-server.toml (above $private):")
+        print("CC blocked that host. With start.sh on the Minecraft")
+        print("server, allow loopback ABOVE $private, restart, then")
+        print("use http://127.0.0.1:8765")
         print('  [[http.rules]]')
         print('  host = "127.0.0.0/8"')
         print('  action = "allow"')
-        print("Or use the Minecraft server's public IP/hostname.")
     else
-        print("Run ytcc/start.sh on the Minecraft Ubuntu host, then:")
-        print("  ytplay setup")
+        print("Is start.sh running on the Minecraft host?")
+        print("Then run:  play setup")
+        print("and paste: http://127.0.0.1:8765")
     end
 end
 
-if arg1 == "setup" or not base or base == "" then
-    print("Paste the converter URL (Minecraft server, not Tailscale):")
-    print("  http://PUBLIC.IP:8765")
-    print("  or http://127.0.0.1:8765 if you allowed loopback")
-    base = prompt("> ")
-    base = base:gsub("/+$", "")
+if arg1 == "setup" or not looksLikeConverter(base) then
+    print("NOT the shell. Paste ONLY the converter address.")
+    print("Because start.sh is on the Minecraft server, type this:")
+    print("  http://127.0.0.1:8765")
+    while true do
+        base = prompt("Converter URL: ")
+        base = (base or ""):gsub("^%s+", ""):gsub("%s+$", ""):gsub("/+$", "")
+        if looksLikeConverter(base) then break end
+        printError("That is not a converter URL. Example:")
+        print("  http://127.0.0.1:8765")
+        print("Do not type play. Do not paste a YouTube link here.")
+    end
     settings.set(SETTINGS_KEY, base)
     pcall(settings.save)
-    print("Saved " .. base)
-    if arg1 == "setup" then return end
+    print("Saved converter " .. base)
 end
 
 print("Checking converter " .. base)
@@ -113,14 +131,20 @@ if not health then
     return
 end
 
-local yt = arg1
-if not yt or yt == "" or yt == "setup" then
-    print("Paste a YouTube URL:")
-    yt = prompt("> ")
+local yt
+if arg1 and arg1 ~= "setup" then
+    yt = table.concat(args, " ")
+else
+    print("Converter is up. NOW paste the YouTube link.")
+    yt = prompt("YouTube URL: ")
 end
-yt = yt:gsub("^%s+", ""):gsub("%s+$", "")
+yt = (yt or ""):gsub("^%s+", ""):gsub("%s+$", "")
 if yt == "" then
-    print("No URL.")
+    print("No YouTube URL. Run play again and paste the link.")
+    return
+end
+if not yt:lower():find("youtu") then
+    printError("That does not look like a YouTube URL.")
     return
 end
 
