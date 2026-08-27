@@ -22,14 +22,6 @@ local function httpGet(url, timeout)
     return body
 end
 
-local function httpGetBin(url)
-    local h, err = http.get({ url = url, binary = true, timeout = 60 })
-    if not h then return nil, err end
-    local body = h.readAll()
-    h.close()
-    return body
-end
-
 local function httpPostJson(url, tbl)
     local body = textutils.serialiseJSON(tbl)
     local h, err = http.post(url, body, { ["Content-Type"] = "application/json" })
@@ -188,18 +180,29 @@ while true do
     end
 end
 
-print("Downloading cover + audio...")
-monLine(1, "Downloading...", colors.cyan)
+pcall(fs.delete, "yt-audio.dfpwm")
+pcall(fs.delete, "yt-cover.nfp")
+
+print("Fetching cover...")
+monLine(1, "Cover art...", colors.cyan)
 
 if info.cover then
     local nfp = httpGet(base .. info.cover, 20)
     if nfp then
-        local f = fs.open("yt-cover.nfp", "w")
-        f.write(nfp)
-        f.close()
         monitor.setBackgroundColor(colors.black)
         monitor.clear()
-        paintutils.drawImage(paintutils.loadImage("yt-cover.nfp"), 1, 1)
+        local y = 1
+        for line in (nfp .. "\n"):gmatch("(.-)\n") do
+            for x = 1, #line do
+                local n = tonumber(line:sub(x, x), 16)
+                if n then
+                    monitor.setCursorPos(x, y)
+                    monitor.setBackgroundColor(2 ^ n)
+                    monitor.write(" ")
+                end
+            end
+            y = y + 1
+        end
     end
 end
 
@@ -210,27 +213,26 @@ end
 monLine(coverH + 1, title, colors.yellow)
 monLine(coverH + 2, "Playing  Ctrl+T to stop", colors.lightGray)
 
-local audio = httpGetBin(base .. info.audio)
-if not audio then
-    printError("Audio download failed")
-    return
-end
-local af = fs.open("yt-audio.dfpwm", "wb")
-af.write(audio)
-af.close()
-
 print("Playing: " .. title)
 local dfpwm = require("cc.audio.dfpwm")
 local decoder = dfpwm.make_decoder()
-local fh = fs.open("yt-audio.dfpwm", "rb")
+local stream, serr = http.get({
+    url = base .. info.audio,
+    binary = true,
+    timeout = 1200,
+})
+if not stream then
+    printError("Audio stream failed: " .. tostring(serr))
+    return
+end
 while true do
-    local chunk = fh.read(16 * 1024)
-    if not chunk then break end
+    local chunk = stream.read(16 * 1024)
+    if not chunk or chunk == "" then break end
     local buf = decoder(chunk)
     while not speaker.playAudio(buf) do
         os.pullEvent("speaker_audio_empty")
     end
 end
-fh.close()
+stream.close()
 monLine(coverH + 2, "Done", colors.lime)
 print("Done.")
