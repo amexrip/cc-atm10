@@ -1,6 +1,8 @@
--- Local YouTube player for CC:Tweaked (4x2 monitor + speaker).
--- A converter on your PC turns the link into DFPWM + cover art.
--- First run: ytplay setup   then paste http://YOUR_TAILSCALE_IP:8765
+-- YouTube player for CC:Tweaked (4x2 monitor + speaker).
+-- A converter on the Minecraft host turns the link into DFPWM + cover art.
+-- First run: ytplay setup
+--   public:   http://YOUR.SERVER.IP:8765
+--   or local: http://127.0.0.1:8765  (needs a CC http.rules allow for 127.0.0.0/8)
 
 local SETTINGS_KEY = "ytcc.base"
 
@@ -75,9 +77,27 @@ end
 
 local base = settings.get(SETTINGS_KEY)
 local arg1 = ...
+local function explainHttpError(err)
+    err = tostring(err or "")
+    printError("Cannot reach converter: " .. err)
+    if err:lower():find("domain not permitted", 1, true) then
+        print("CC blocked that host. Do not use 10.x, 192.168.x, 127.x,")
+        print("or Tailscale 100.x unless you allow it in")
+        print("serverconfig/computercraft-server.toml (above $private):")
+        print('  [[http.rules]]')
+        print('  host = "127.0.0.0/8"')
+        print('  action = "allow"')
+        print("Or use the Minecraft server's public IP/hostname.")
+    else
+        print("Run ytcc/start.sh on the Minecraft Ubuntu host, then:")
+        print("  ytplay setup")
+    end
+end
+
 if arg1 == "setup" or not base or base == "" then
-    print("Paste the converter URL from ytcc/start.sh")
-    print("Use the Tailscale one, e.g. http://100.x.x.x:8765")
+    print("Paste the converter URL (Minecraft server, not Tailscale):")
+    print("  http://PUBLIC.IP:8765")
+    print("  or http://127.0.0.1:8765 if you allowed loopback")
     base = prompt("> ")
     base = base:gsub("/+$", "")
     settings.set(SETTINGS_KEY, base)
@@ -89,9 +109,7 @@ end
 print("Checking converter " .. base)
 local health, herr = httpGet(base .. "/health", 5)
 if not health then
-    printError("Cannot reach converter: " .. tostring(herr))
-    print("On your PC run:  ~/Desktop/cc-atm10/ytcc/start.sh")
-    print("Then:  ytplay setup")
+    explainHttpError(herr)
     return
 end
 
