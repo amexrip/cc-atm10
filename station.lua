@@ -270,7 +270,7 @@ while true do
     if sender and protocol == PROTOCOL then
             handleMessage(message, sender)
         for _ = 1, 40 do
-            local s2, m2, p2 = rednet.receive(PROTOCOL, 0)
+            local s2, m2, p2 = rednet.receive(PROTOCOL, 0.05)
             if not s2 then break end
             if p2 == PROTOCOL then
                 handleMessage(m2, s2)
