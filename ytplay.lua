@@ -1,8 +1,5 @@
 -- YouTube player for CC:Tweaked (4x2 monitor + speaker).
--- A converter on the Minecraft host turns the link into DFPWM + cover art.
--- First run: ytplay setup
---   public:   http://YOUR.SERVER.IP:8765
---   or local: http://127.0.0.1:8765  (needs a CC http.rules allow for 127.0.0.0/8)
+-- play 7 — do not pass HTTP timeouts (ATM10 CC only allows 0-60s).
 
 local SETTINGS_KEY = "ytcc.base"
 
@@ -13,16 +10,15 @@ local function jsonDecode(s)
     return textutils.unserialize(s)
 end
 
-local function clampTimeout(t)
-    t = tonumber(t) or 10
-    if t < 0 then t = 0 end
-    if t > 60 then t = 60 end
-    return t
-end
-
-local function httpGet(url, timeout, binary)
-    local opts = { url = url, timeout = clampTimeout(timeout), binary = binary and true or false }
-    local h, err = http.get(opts)
+-- Never set timeout in the options table. This pack's CC errors if it is
+-- out of 0-60, and older play.lua used 1200.
+local function httpGet(url, binary)
+    local h, err
+    if binary then
+        h, err = http.get(url, nil, true)
+    else
+        h, err = http.get(url)
+    end
     if not h then return nil, err end
     local body = h.readAll()
     h.close()
@@ -123,8 +119,9 @@ if arg1 == "setup" or not looksLikeConverter(base) then
     print("Saved converter " .. base)
 end
 
+print("play 7")
 print("Checking converter " .. base)
-local health, herr = httpGet(base .. "/health", 5)
+local health, herr = httpGet(base .. "/health")
 if not health then
     explainHttpError(herr)
     return
@@ -167,7 +164,7 @@ end
 local info
 while true do
     sleep(2)
-    local body, err = httpGet(base .. "/job/" .. job.id, 10)
+    local body, err = httpGet(base .. "/job/" .. job.id)
     if not body then
         printError("Status failed: " .. tostring(err))
         return
@@ -197,7 +194,7 @@ print("Fetching cover...")
 monLine(1, "Cover art...", colors.cyan)
 
 if info.cover then
-    local nfp = httpGet(base .. info.cover, 20)
+    local nfp = httpGet(base .. info.cover)
     if nfp then
         monitor.setBackgroundColor(colors.black)
         monitor.clear()
@@ -225,7 +222,7 @@ monLine(coverH + 2, "Playing  Ctrl+T to stop", colors.lightGray)
 
 print("Loading audio...")
 monLine(coverH + 2, "Loading audio...", colors.lightGray)
-local audio, aerr = httpGet(base .. info.audio, 60, true)
+local audio, aerr = httpGet(base .. info.audio, true)
 if not audio or audio == "" then
     printError("Audio download failed: " .. tostring(aerr))
     return
