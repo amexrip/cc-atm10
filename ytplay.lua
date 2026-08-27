@@ -1,86 +1,59 @@
--- YouTube player for CC:Tweaked
--- Hardware: 4x2 advanced monitor (top), speaker (left), advanced computer.
--- Paste a YouTube URL. Audio plays on the speaker; title + video/cover draw
--- on the 4x2 monitor. Conversion is done by YouCube (DFPWM + 32vid).
+-- Local YouTube player for CC:Tweaked (4x2 monitor + speaker).
+-- A converter on your PC turns the link into DFPWM + cover art.
+-- First run: ytplay setup   then paste http://YOUR_TAILSCALE_IP:8765
 
-local SERVER = "wss://youcube.onrender.com"
-local CONNECT_TIMEOUT = 25
+local SETTINGS_KEY = "ytcc.base"
 
-local YT_FILES = {
-    ["youcube.lua"] = "https://raw.githubusercontent.com/CC-YouCube/client/main/src/youcube.lua",
-    ["lib/youcubeapi.lua"] = "https://raw.githubusercontent.com/CC-YouCube/client/main/src/lib/youcubeapi.lua",
-    ["lib/numberformatter.lua"] = "https://raw.githubusercontent.com/CC-YouCube/client/main/src/lib/numberformatter.lua",
-    ["lib/semver.lua"] = "https://raw.githubusercontent.com/CC-YouCube/client/main/src/lib/semver.lua",
-    ["lib/argparse.lua"] = "https://raw.githubusercontent.com/CC-YouCube/client/main/src/lib/argparse.lua",
-    ["lib/string_pack.lua"] = "https://raw.githubusercontent.com/CC-YouCube/client/main/src/lib/string_pack.lua",
-}
+local function jsonDecode(s)
+    if textutils.unserialiseJSON then
+        return textutils.unserialiseJSON(s)
+    end
+    return textutils.unserialize(s)
+end
+
+local function httpGet(url, timeout)
+    local opts = { url = url, timeout = timeout or 10, binary = false }
+    local h, err = http.get(opts)
+    if not h then return nil, err end
+    local body = h.readAll()
+    h.close()
+    return body
+end
+
+local function httpGetBin(url)
+    local h, err = http.get({ url = url, binary = true, timeout = 60 })
+    if not h then return nil, err end
+    local body = h.readAll()
+    h.close()
+    return body
+end
+
+local function httpPostJson(url, tbl)
+    local body = textutils.serialiseJSON(tbl)
+    local h, err = http.post(url, body, { ["Content-Type"] = "application/json" })
+    if not h then return nil, err end
+    local resp = h.readAll()
+    h.close()
+    return jsonDecode(resp)
+end
+
+local function prompt(label)
+    term.setTextColor(colors.yellow)
+    write(label)
+    term.setTextColor(colors.white)
+    return read()
+end
 
 if not http then
-    printError("Enable http in the ComputerCraft config.")
+    printError("Enable http in ComputerCraft.")
     return
-end
-
-if not http.websocket then
-    printError("Enable websockets in the ComputerCraft config.")
-    return
-end
-
-local function download(path, url, force)
-    if fs.exists(path) and not force then return true end
-    print("Downloading " .. path .. " ...")
-    local dir = path:match("(.+)/")
-    if dir and not fs.exists(dir) then
-        fs.makeDir(dir)
-    end
-    local h, err = http.get({ url = url, binary = true })
-    if not h then
-        printError("Failed " .. path .. ": " .. tostring(err))
-        return false
-    end
-    local f = fs.open(path, "wb")
-    f.write(h.readAll())
-    f.close()
-    h.close()
-    return true
-end
-
--- Public knijn hosts are dead / TLS-broken. Stock YouCube also tries
--- ws://127.0.0.1:5000 then times out in 5s. Force the live Render server
--- and a longer handshake timeout.
-local function patchYouCubeApi()
-    local path = "lib/youcubeapi.lua"
-    local h = fs.open(path, "r")
-    if not h then return false end
-    local src = h.readAll()
-    h.close()
-    src = src:gsub("local servers = %b{}", 'local servers = { "' .. SERVER .. '" }', 1)
-    src = src:gsub("websocket_with_timeout%(server, nil, %d+%)", "websocket_with_timeout(server, nil, " .. CONNECT_TIMEOUT .. ")")
-    local f = fs.open(path, "w")
-    f.write(src)
-    f.close()
-    return true
-end
-
-local function ensureYouCube()
-    for path, url in pairs(YT_FILES) do
-        if not download(path, url, false) then return false end
-    end
-    return patchYouCubeApi()
-end
-
-local function monWrite(monitor, y, text, color)
-    monitor.setCursorPos(1, y)
-    monitor.clearLine()
-    if color then monitor.setTextColor(color) end
-    monitor.write(tostring(text):sub(1, select(1, monitor.getSize())))
 end
 
 local monitor = peripheral.find("monitor")
 if not monitor then
-    printError("No monitor found. Attach a 4x2 advanced monitor on top.")
+    printError("No monitor. Use a 4x2 advanced monitor on top.")
     return
 end
-
 monitor.setTextScale(0.5)
 monitor.setBackgroundColor(colors.black)
 monitor.setTextColor(colors.white)
@@ -88,62 +61,134 @@ monitor.clear()
 
 local speaker = peripheral.find("speaker")
 if not speaker then
-    printError("No speaker found. Put a speaker on the left of the computer.")
+    printError("No speaker. Put a speaker on the left.")
     return
 end
 
-print("ATM10 YouTube player")
-print("Monitor: 4x2  Speaker: " .. peripheral.getName(speaker))
-print("")
-
-if not ensureYouCube() then
-    printError("Could not install the YouTube converter client.")
-    return
+local function monLine(y, text, color)
+    monitor.setCursorPos(1, y)
+    monitor.clearLine()
+    if color then monitor.setTextColor(color) end
+    local w = select(1, monitor.getSize())
+    monitor.write(tostring(text):sub(1, w))
 end
 
-if settings then
-    settings.set("youcube.server", SERVER)
+local base = settings.get(SETTINGS_KEY)
+local arg1 = ...
+if arg1 == "setup" or not base or base == "" then
+    print("Paste the converter URL from ytcc/start.sh")
+    print("Use the Tailscale one, e.g. http://100.x.x.x:8765")
+    base = prompt("> ")
+    base = base:gsub("/+$", "")
+    settings.set(SETTINGS_KEY, base)
     pcall(settings.save)
+    print("Saved " .. base)
+    if arg1 == "setup" then return end
 end
 
-local url = ...
-if not url or url == "" then
-    print("Paste a YouTube link, then Enter:")
-    term.setTextColor(colors.yellow)
-    url = read()
-    term.setTextColor(colors.white)
-end
-
-url = url and url:gsub("^%s+", ""):gsub("%s+$", "") or ""
-if url == "" then
-    print("No URL given.")
+print("Checking converter " .. base)
+local health, herr = httpGet(base .. "/health", 5)
+if not health then
+    printError("Cannot reach converter: " .. tostring(herr))
+    print("On your PC run:  ~/Desktop/cc-atm10/ytcc/start.sh")
+    print("Then:  ytplay setup")
     return
 end
 
-monWrite(monitor, 1, "Connecting to converter...", colors.cyan)
-monWrite(monitor, 2, url, colors.lightGray)
-monWrite(monitor, 4, "This can take up to " .. CONNECT_TIMEOUT .. "s", colors.gray)
-
-print("")
-print("Connecting to " .. SERVER)
-print("(first start after idle can be slow)")
-print("Hold Ctrl+T to stop.")
-
--- Keep errors on the computer. Redirect only while YouCube is running.
-local old = term.redirect(monitor)
-local ok, err = pcall(function()
-    shell.run("youcube.lua", "--server", SERVER, url)
-end)
-term.redirect(old)
-
-if not ok or (err and tostring(err):lower():find("timeout")) then
-    local msg = tostring(err or "unknown error")
-    printError("Playback failed: " .. msg)
-    print("The converter at youcube.onrender.com may be waking up.")
-    print("Run ytplay again in 20 seconds.")
-    monitor.setBackgroundColor(colors.black)
-    monitor.clear()
-    monWrite(monitor, 1, "Converter timed out", colors.red)
-    monWrite(monitor, 3, "Run ytplay again", colors.white)
-    monWrite(monitor, 4, "Render servers sleep when idle", colors.lightGray)
+local yt = arg1
+if not yt or yt == "" or yt == "setup" then
+    print("Paste a YouTube URL:")
+    yt = prompt("> ")
 end
+yt = yt:gsub("^%s+", ""):gsub("%s+$", "")
+if yt == "" then
+    print("No URL.")
+    return
+end
+
+local mw, mh = monitor.getSize()
+local titleH = 3
+local coverW, coverH = mw, math.max(8, mh - titleH)
+
+monLine(1, "Converting...", colors.cyan)
+monLine(2, yt, colors.lightGray)
+
+print("Starting convert job...")
+local job, jerr = httpPostJson(base .. "/job", { url = yt, w = coverW, h = coverH })
+if not job or not job.id then
+    printError("Job failed: " .. tostring(jerr or (job and job.error)))
+    return
+end
+
+local info
+while true do
+    sleep(2)
+    local body, err = httpGet(base .. "/job/" .. job.id, 10)
+    if not body then
+        printError("Status failed: " .. tostring(err))
+        return
+    end
+    info = jsonDecode(body)
+    if not info then
+        printError("Bad status JSON")
+        return
+    end
+    monLine(1, info.phase or info.status or "...", colors.cyan)
+    monLine(2, info.title or "", colors.yellow)
+    monLine(3, info.message or "", colors.lightGray)
+    print((info.phase or "?") .. " - " .. (info.message or ""))
+    if info.status == "ready" then break end
+    if info.status == "error" then
+        printError(info.error or info.message or "convert error")
+        monLine(1, "Convert failed", colors.red)
+        monLine(3, info.error or info.message or "", colors.orange)
+        return
+    end
+end
+
+print("Downloading cover + audio...")
+monLine(1, "Downloading...", colors.cyan)
+
+if info.cover then
+    local nfp = httpGet(base .. info.cover, 20)
+    if nfp then
+        local f = fs.open("yt-cover.nfp", "w")
+        f.write(nfp)
+        f.close()
+        monitor.setBackgroundColor(colors.black)
+        monitor.clear()
+        paintutils.drawImage(paintutils.loadImage("yt-cover.nfp"), 1, 1)
+    end
+end
+
+local title = info.title or "YouTube"
+for i = 0, titleH - 1 do
+    monLine(coverH + 1 + i, "", colors.white)
+end
+monLine(coverH + 1, title, colors.yellow)
+monLine(coverH + 2, "Playing  Ctrl+T to stop", colors.lightGray)
+
+local audio = httpGetBin(base .. info.audio)
+if not audio then
+    printError("Audio download failed")
+    return
+end
+local af = fs.open("yt-audio.dfpwm", "wb")
+af.write(audio)
+af.close()
+
+print("Playing: " .. title)
+local dfpwm = require("cc.audio.dfpwm")
+local decoder = dfpwm.make_decoder()
+local fh = fs.open("yt-audio.dfpwm", "rb")
+while true do
+    local chunk = fh.read(16 * 1024)
+    if not chunk then break end
+    local buf = decoder(chunk)
+    while not speaker.playAudio(buf) do
+        os.pullEvent("speaker_audio_empty")
+    end
+end
+fh.close()
+monLine(coverH + 2, "Done", colors.lime)
+print("Done.")
