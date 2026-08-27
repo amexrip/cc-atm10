@@ -73,7 +73,10 @@ local function ensurePairingSound()
         return false
     end
     print("Downloading pairing sound...")
-    local h, err = http.get(AUDIO_URL, nil, true)
+    local h, err = http.get({
+        url = AUDIO_URL,
+        binary = true,
+    })
     if not h then
         print("Pairing sound download failed: " .. tostring(err))
         return false
