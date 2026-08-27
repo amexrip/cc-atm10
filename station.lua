@@ -44,6 +44,9 @@ if not speaker then
     print("Warning: no speaker found")
 end
 
+local AUDIO_FILE = "ready-to-pair.dfpwm"
+local AUDIO_URL = "https://raw.githubusercontent.com/amexrip/cc-atm10/main/ready-to-pair.dfpwm"
+
 -- ---------------------------------------------------------------------------
 -- Sounds
 -- ---------------------------------------------------------------------------
@@ -61,6 +64,55 @@ local function playFuelAlert()
         speaker.playSound("block.note_block.bass", 1.0, 0.6)
         sleep(0.25)
     end
+end
+
+local function ensurePairingSound()
+    if fs.exists(AUDIO_FILE) then return true end
+    if not http then
+        print("HTTP is off; cannot download pairing sound")
+        return false
+    end
+    print("Downloading pairing sound...")
+    local h, err = http.get(AUDIO_URL, nil, true)
+    if not h then
+        print("Pairing sound download failed: " .. tostring(err))
+        return false
+    end
+    local f = fs.open(AUDIO_FILE, "wb")
+    f.write(h.readAll())
+    f.close()
+    h.close()
+    return fs.exists(AUDIO_FILE)
+end
+
+-- Bluetooth-style clip on the speaker until a turtle pairs.
+local function playPairingSound()
+    if TURTLE_ID or not speaker then return end
+    if not ensurePairingSound() then return end
+    local ok, dfpwm = pcall(require, "cc.audio.dfpwm")
+    if not ok or not dfpwm then
+        print("This CC version cannot play DFPWM audio")
+        return
+    end
+    print("Playing pairing sound on speaker")
+    while not TURTLE_ID do
+        local decoder = dfpwm.make_decoder()
+        local h = fs.open(AUDIO_FILE, "rb")
+        if not h then return end
+        while not TURTLE_ID do
+            local chunk = h.read(16 * 1024)
+            if not chunk then break end
+            local buffer = decoder(chunk)
+            while not TURTLE_ID do
+                if speaker.playAudio(buffer, 1.5) then break end
+                os.pullEvent("speaker_audio_empty")
+            end
+        end
+        h.close()
+        if TURTLE_ID then break end
+        sleep(1.2)
+    end
+    pcall(function() speaker.stop() end)
 end
 
 -- ---------------------------------------------------------------------------
@@ -263,25 +315,33 @@ end
 
 print("Mining station ID: " .. os.getComputerID())
 print("Modem: " .. modemSide .. "  Monitor: " .. monW .. "x" .. monH .. "  Speaker: " .. tostring(speaker ~= nil))
+if not TURTLE_ID then
+    statusLine = "Ready to pair"
+end
 draw()
 
-while true do
-    local sender, message, protocol = rednet.receive(PROTOCOL, 0.2)
-    if sender and protocol == PROTOCOL then
+local function messageLoop()
+    while true do
+        local sender, message, protocol = rednet.receive(PROTOCOL, 0.2)
+        if sender and protocol == PROTOCOL then
             handleMessage(message, sender)
-        for _ = 1, 40 do
-            local s2, m2, p2 = rednet.receive(PROTOCOL, 0.05)
-            if not s2 then break end
-            if p2 == PROTOCOL then
-                handleMessage(m2, s2)
+            for _ = 1, 40 do
+                local s2, m2, p2 = rednet.receive(PROTOCOL, 0.05)
+                if not s2 then break end
+                if p2 == PROTOCOL then
+                    handleMessage(m2, s2)
+                end
             end
-        end
-        if dirty then
-            draw()
-        end
-        if pendingOreSounds > 0 then
-            playOreChime()
-            pendingOreSounds = 0
+            if dirty then
+                draw()
+            end
+            if pendingOreSounds > 0 then
+                playOreChime()
+                pendingOreSounds = 0
+            end
         end
     end
 end
+
+-- Audio runs beside rednet so the station can still accept the turtle hello.
+parallel.waitForAll(playPairingSound, messageLoop)
