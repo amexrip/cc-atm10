@@ -13,8 +13,15 @@ local function jsonDecode(s)
     return textutils.unserialize(s)
 end
 
-local function httpGet(url, timeout)
-    local opts = { url = url, timeout = timeout or 10, binary = false }
+local function clampTimeout(t)
+    t = tonumber(t) or 10
+    if t < 0 then t = 0 end
+    if t > 60 then t = 60 end
+    return t
+end
+
+local function httpGet(url, timeout, binary)
+    local opts = { url = url, timeout = clampTimeout(timeout), binary = binary and true or false }
     local h, err = http.get(opts)
     if not h then return nil, err end
     local body = h.readAll()
@@ -130,10 +137,13 @@ else
     print("Converter is up. NOW paste the YouTube link.")
     yt = prompt("YouTube URL: ")
 end
-yt = (yt or ""):gsub("^%s+", ""):gsub("%s+$", "")
+yt = (yt or ""):gsub("^%s+", ""):gsub("%s+$", ""):gsub("^/+", "")
 if yt == "" then
     print("No YouTube URL. Run play again and paste the link.")
     return
+end
+if not yt:lower():find("^https?://") then
+    yt = "https://" .. yt
 end
 if not yt:lower():find("youtu") then
     printError("That does not look like a YouTube URL.")
@@ -213,26 +223,27 @@ end
 monLine(coverH + 1, title, colors.yellow)
 monLine(coverH + 2, "Playing  Ctrl+T to stop", colors.lightGray)
 
-print("Playing: " .. title)
-local dfpwm = require("cc.audio.dfpwm")
-local decoder = dfpwm.make_decoder()
-local stream, serr = http.get({
-    url = base .. info.audio,
-    binary = true,
-    timeout = 1200,
-})
-if not stream then
-    printError("Audio stream failed: " .. tostring(serr))
+print("Loading audio...")
+monLine(coverH + 2, "Loading audio...", colors.lightGray)
+local audio, aerr = httpGet(base .. info.audio, 60, true)
+if not audio or audio == "" then
+    printError("Audio download failed: " .. tostring(aerr))
     return
 end
-while true do
-    local chunk = stream.read(16 * 1024)
-    if not chunk or chunk == "" then break end
+
+print("Playing: " .. title)
+monLine(coverH + 2, "Playing  Ctrl+T to stop", colors.lightGray)
+local dfpwm = require("cc.audio.dfpwm")
+local decoder = dfpwm.make_decoder()
+local pos = 1
+local n = #audio
+while pos <= n do
+    local chunk = audio:sub(pos, pos + 16 * 1024 - 1)
+    pos = pos + #chunk
     local buf = decoder(chunk)
     while not speaker.playAudio(buf) do
         os.pullEvent("speaker_audio_empty")
     end
 end
-stream.close()
 monLine(coverH + 2, "Done", colors.lime)
 print("Done.")
