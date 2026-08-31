@@ -172,6 +172,10 @@ local function inventoryFull()
     return true
 end
 
+local function isChest(name)
+    return name and name:lower():find("chest", 1, true) ~= nil
+end
+
 local function returnDeferred(slots)
     for _, slot in ipairs(slots) do
         turtle.select(slot)
@@ -217,6 +221,11 @@ end
 
 local function dumpAtHome()
     face(2) -- unsorted chest is behind the turtle at its start point
+    local ok, block = turtle.inspect()
+    if not ok or not block or not isChest(block.name) then
+        face(0)
+        fail("Unsorted chest not found directly behind the miner; refusing to drop inventory")
+    end
     for slot = 1, 16 do
         turtle.select(slot)
         if turtle.getItemCount(slot) > 0 and not turtle.drop() then
