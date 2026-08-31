@@ -221,21 +221,32 @@ end
 
 local function dumpAtHome()
     face(2) -- unsorted chest is behind the turtle at its start point
-    local ok, block = turtle.inspect()
-    local dropItem
-    if ok and block and isChest(block.name) then
-        dropItem = turtle.drop
-    else
-        -- The miner can be one layer above or below the spawn chest after
-        -- aligning itself with the current quarry layer.
+    local function findChestDrop()
+        local ok, block = turtle.inspect()
+        if ok and block and isChest(block.name) then return turtle.drop end
+
         local aboveOk, aboveBlock = turtle.inspectUp()
         if aboveOk and aboveBlock and isChest(aboveBlock.name) then
-            dropItem = turtle.dropUp
-        else
-            local belowOk, belowBlock = turtle.inspectDown()
-            if belowOk and belowBlock and isChest(belowBlock.name) then
-                dropItem = turtle.dropDown
-            end
+            return turtle.dropUp
+        end
+
+        local belowOk, belowBlock = turtle.inspectDown()
+        if belowOk and belowBlock and isChest(belowBlock.name) then
+            return turtle.dropDown
+        end
+        return nil
+    end
+
+    local dropItem = findChestDrop()
+    local movedUpForChest = false
+    if not dropItem then
+        -- If the miner is one block below the spawn level, check again after
+        -- moving up without digging through any block.
+        if turtle.up() then
+            pos.y = pos.y + 1
+            movedUpForChest = true
+            face(2)
+            dropItem = findChestDrop()
         end
     end
     if not dropItem then
@@ -249,6 +260,11 @@ local function dumpAtHome()
             face(0)
             fail("Unsorted chest is full or missing")
         end
+    end
+    if movedUpForChest then
+        face(0)
+        if not turtle.down() then fail("Cannot return to miner spawn height") end
+        pos.y = pos.y - 1
     end
     face(0)
 end
