@@ -176,10 +176,10 @@ local function isChest(name)
     return name and name:lower():find("chest", 1, true) ~= nil
 end
 
-local function returnDeferred(slots)
+local function returnDeferred(slots, dropItem)
     for _, slot in ipairs(slots) do
         turtle.select(slot)
-        if not turtle.drop(64) then return false end
+        if not dropItem(64) then return false end
     end
     return true
 end
@@ -187,6 +187,29 @@ end
 local function refuelFromChest()
     if fuel() == "unlimited" or fuel() >= FUEL_TARGET then return true end
     face(sideDirection(FUEL_CHEST_SIDE))
+    local suckFuel
+    local dropEmpty
+    local ok, block = turtle.inspect()
+    if ok and block and isChest(block.name) then
+        suckFuel = turtle.suck
+        dropEmpty = turtle.drop
+    else
+        local aboveOk, aboveBlock = turtle.inspectUp()
+        if aboveOk and aboveBlock and isChest(aboveBlock.name) then
+            suckFuel = turtle.suckUp
+            dropEmpty = turtle.dropUp
+        else
+            local belowOk, belowBlock = turtle.inspectDown()
+            if belowOk and belowBlock and isChest(belowBlock.name) then
+                suckFuel = turtle.suckDown
+                dropEmpty = turtle.dropDown
+            end
+        end
+    end
+    if not suckFuel or not dropEmpty then
+        face(0)
+        fail("Fuel chest not found beside the miner")
+    end
     local deferred = {}
     while fuel() < FUEL_TARGET do
         local slot
@@ -195,11 +218,11 @@ local function refuelFromChest()
         end
         if not slot then break end
         turtle.select(slot)
-        if not turtle.suck(1) then break end
+        if not suckFuel(1) then break end
         local detail = turtle.getItemDetail(slot)
         if detail and detail.name == "minecraft:lava_bucket" then
             if turtle.refuel(1) then
-                if not turtle.drop(64) then
+                if not dropEmpty(64) then
                     deferred[#deferred + 1] = slot
                     break
                 end
@@ -211,7 +234,7 @@ local function refuelFromChest()
             deferred[#deferred + 1] = slot
         end
     end
-    if not returnDeferred(deferred) then
+    if not returnDeferred(deferred, dropEmpty) then
         face(0)
         fail("Fuel chest rejected a non-fuel item")
     end
