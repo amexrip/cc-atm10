@@ -5,6 +5,7 @@ local PROTOCOL = "atm10_quarry_v2"
 local DATA_FILE = "quarry_station.dat"
 local PLAYER_NAME = nil -- Set this to your Minecraft name to restrict Y/N replies.
 local STARTUP_AUDIO = "startup.dfpwm"
+local USE_UNICODE_UI = false -- CraftOS 1.9 monitors need ASCII to avoid garbled UTF-8.
 
 local FUEL_WARN = {
     miner = 2000,
@@ -219,22 +220,29 @@ local function activityBar(active, width)
     return string.rep("-", marker - 1) .. "#" .. string.rep("-", width - marker)
 end
 
+local boxTopLeft = USE_UNICODE_UI and "╔" or "+"
+local boxTopRight = USE_UNICODE_UI and "╗" or "+"
+local boxBottomLeft = USE_UNICODE_UI and "╚" or "+"
+local boxBottomRight = USE_UNICODE_UI and "╝" or "+"
+local boxHorizontal = USE_UNICODE_UI and "═" or "="
+local boxVertical = USE_UNICODE_UI and "║" or "|"
+
 local function cardLine(x, y, width, text, color)
     local inner = width - 2
     text = clipText(text, math.max(0, inner - 2))
-    writeAt(x, y, "║ " .. text .. string.rep(" ", math.max(0, inner - displayLength(text) - 1)) .. "║", color)
+    writeAt(x, y, boxVertical .. " " .. text .. string.rep(" ", math.max(0, inner - displayLength(text) - 1)) .. boxVertical, color)
 end
 
 local function drawCard(x, y, width, height, title, accent, lines)
     local inner = width - 2
-    writeAt(x, y, "╔" .. string.rep("═", inner) .. "╗", accent)
+    writeAt(x, y, boxTopLeft .. string.rep(boxHorizontal, inner) .. boxTopRight, accent)
     cardLine(x, y + 1, width, title, accent)
     for index, line in ipairs(lines) do
         if index + 1 < height then
             cardLine(x, y + index + 1, width, line.text, line.color)
         end
     end
-    writeAt(x, y + height - 1, "╚" .. string.rep("═", inner) .. "╝", accent)
+    writeAt(x, y + height - 1, boxBottomLeft .. string.rep(boxHorizontal, inner) .. boxBottomRight, accent)
 end
 
 local function draw()
@@ -255,7 +263,7 @@ local function draw()
     writeAt(math.max(2, math.floor((width - #title) / 2)), 1, title, colors.cyan)
     writeAt(2, 2, "STATION " .. os.getComputerID(), colors.lightGray)
     writeAt(math.max(2, width - 24), 2, "WIRELESS  /  READY", colors.lime)
-    local divider = "┌── ⋆⋅☆⋅⋆ ──┐"
+    local divider = USE_UNICODE_UI and "┌── ⋆⋅☆⋅⋆ ──┐" or "+-- * . * . * --+"
     writeAt(math.max(2, math.floor((width - displayLength(divider)) / 2)), 3, divider, colors.blue)
 
     local minerFuel = type(miner.fuel) == "number" and miner.fuel or nil
