@@ -7,7 +7,8 @@ local BASE_ID = nil
 local PAIR_FILE = "quarry_station_id"
 local ROLE = "lava"
 local LABEL = "Lava Bucket Turtle"
-local BUCKET_CHEST_SIDE = "bottom"
+local INPUT_CHEST_SIDE = "bottom"
+local OUTPUT_CHEST_SIDE = "left"
 local halted = false
 
 local modem
@@ -62,19 +63,35 @@ local function sideCall(name, ...)
 end
 
 local function chestSuck()
-    if BUCKET_CHEST_SIDE == "bottom" then return turtle.suckDown(1) end
-    if BUCKET_CHEST_SIDE == "top" then return turtle.suckUp(1) end
+    if INPUT_CHEST_SIDE == "bottom" then return turtle.suckDown(1) end
+    if INPUT_CHEST_SIDE == "top" then return turtle.suckUp(1) end
+    if INPUT_CHEST_SIDE == "left" then turtle.turnLeft(); local ok = turtle.suck(1); turtle.turnRight(); return ok end
+    if INPUT_CHEST_SIDE == "right" then turtle.turnRight(); local ok = turtle.suck(1); turtle.turnLeft(); return ok end
     return turtle.suck(1)
 end
 
 local function chestDrop(amount)
-    if BUCKET_CHEST_SIDE == "bottom" then
+    if OUTPUT_CHEST_SIDE == "bottom" then
         if amount then return turtle.dropDown(amount) end
         return turtle.dropDown()
     end
-    if BUCKET_CHEST_SIDE == "top" then
+    if OUTPUT_CHEST_SIDE == "top" then
         if amount then return turtle.dropUp(amount) end
         return turtle.dropUp()
+    end
+    if OUTPUT_CHEST_SIDE == "left" then
+        turtle.turnLeft()
+        local ok
+        if amount then ok = turtle.drop(amount) else ok = turtle.drop() end
+        turtle.turnRight()
+        return ok
+    end
+    if OUTPUT_CHEST_SIDE == "right" then
+        turtle.turnRight()
+        local ok
+        if amount then ok = turtle.drop(amount) else ok = turtle.drop() end
+        turtle.turnLeft()
+        return ok
     end
     if amount then return turtle.drop(amount) end
     return turtle.drop()
@@ -127,18 +144,20 @@ local function findReceivedSlot(before)
     return nil
 end
 
-local function chestCounts()
-    local chest = peripheral.wrap(BUCKET_CHEST_SIDE)
-    if not chest or not chest.list then return "?", "?" end
-    local filled, empty = 0, 0
+local function countChestItems(side, itemName)
+    local chest = peripheral.wrap(side)
+    if not chest or not chest.list then return "?" end
+    local count = 0
     for slot, detail in pairs(chest.list()) do
         local item = chest.getItemDetail(slot)
-        if item then
-            if item.name == "minecraft:lava_bucket" then filled = filled + item.count end
-            if item.name == "minecraft:bucket" then empty = empty + item.count end
-        end
+        if item and item.name == itemName then count = count + item.count end
     end
-    return filled, empty
+    return count
+end
+
+local function chestCounts()
+    return countChestItems(OUTPUT_CHEST_SIDE, "minecraft:lava_bucket"),
+        countChestItems(INPUT_CHEST_SIDE, "minecraft:bucket")
 end
 
 local function reportBuckets()
