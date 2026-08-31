@@ -99,11 +99,21 @@ local function playFallback()
 end
 
 local function playDfpwm(path)
-    if not speaker or not fs.exists(path) then
+    if not speaker or not speaker.playAudio or not fs.exists(path) then
         playFallback()
         return
     end
-    local dfpwm = require("cc.audio.dfpwm")
+    if type(require) ~= "function" then
+        print("DFPWM library unavailable; using startup tone")
+        playFallback()
+        return
+    end
+    local loaded, dfpwm = pcall(require, "cc.audio.dfpwm")
+    if not loaded or not dfpwm then
+        print("DFPWM library unavailable; using startup tone")
+        playFallback()
+        return
+    end
     local decoder = dfpwm.make_decoder()
     local file = fs.open(path, "rb")
     if not file then
