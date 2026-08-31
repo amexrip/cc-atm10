@@ -70,10 +70,37 @@ local function chestSuck()
     return turtle.suck(1)
 end
 
-local function chestDrop()
-    if BUCKET_CHEST_SIDE == "bottom" then return turtle.dropDown() end
-    if BUCKET_CHEST_SIDE == "top" then return turtle.dropUp() end
+local function chestDrop(amount)
+    if BUCKET_CHEST_SIDE == "bottom" then
+        if amount then return turtle.dropDown(amount) end
+        return turtle.dropDown()
+    end
+    if BUCKET_CHEST_SIDE == "top" then
+        if amount then return turtle.dropUp(amount) end
+        return turtle.dropUp()
+    end
+    if amount then return turtle.drop(amount) end
     return turtle.drop()
+end
+
+local function findItemSlot(itemName)
+    for slot = 1, 16 do
+        local item = turtle.getItemDetail(slot)
+        if item and item.name == itemName then return slot end
+    end
+    return nil
+end
+
+local function countItems(itemName)
+    local count, firstSlot = 0, nil
+    for slot = 1, 16 do
+        local item = turtle.getItemDetail(slot)
+        if item and item.name == itemName then
+            count = count + item.count
+            firstSlot = firstSlot or slot
+        end
+    end
+    return count, firstSlot
 end
 
 local function fuelFromChest()
@@ -171,15 +198,18 @@ local function fillFromDrawer(slot)
         if not alreadyListed then directions[#directions + 1] = direction end
     end
 
+    local filledBefore = countItems("minecraft:lava_bucket")
     local currentDirection = 0
     for _, direction in ipairs(directions) do
         turnBy(direction - currentDirection)
         currentDirection = direction
+        turtle.select(slot)
         local ok = turtle.place()
-        local item = turtle.getItemDetail(slot)
-        if ok and item and item.name == "minecraft:lava_bucket" then
+        local filledAfter, filledSlot = countItems("minecraft:lava_bucket")
+        if ok and filledAfter > filledBefore then
+            turtle.select(filledSlot)
             turnBy(-currentDirection)
-            return true
+            return true, filledSlot
         end
     end
     turnBy(-currentDirection)
@@ -187,15 +217,19 @@ local function fillFromDrawer(slot)
     -- A drawer tower may be one block above or below the turtle instead of
     -- being level with it. The chest below normally makes placeDown fail
     -- safely, but trying it keeps this routine compatible with either layout.
+    turtle.select(slot)
     local ok = turtle.placeUp()
-    local item = turtle.getItemDetail(slot)
-    if ok and item and item.name == "minecraft:lava_bucket" then
-        return true
+    local filledAfter, filledSlot = countItems("minecraft:lava_bucket")
+    if ok and filledAfter > filledBefore then
+        turtle.select(filledSlot)
+        return true, filledSlot
     end
+    turtle.select(slot)
     ok = turtle.placeDown()
-    item = turtle.getItemDetail(slot)
-    if ok and item and item.name == "minecraft:lava_bucket" then
-        return true
+    filledAfter, filledSlot = countItems("minecraft:lava_bucket")
+    if ok and filledAfter > filledBefore then
+        turtle.select(filledSlot)
+        return true, filledSlot
     end
     return false
 end
@@ -205,18 +239,26 @@ local function refillBuckets()
     local deferred = {}
     local refilled = 0
     while true do
-        local slot
-        for candidate = 1, 16 do
-            if turtle.getItemCount(candidate) == 0 then slot = candidate break end
+        local slot = findItemSlot("minecraft:bucket")
+        if not slot then
+            local emptySlot
+            for candidate = 1, 16 do
+                if turtle.getItemCount(candidate) == 0 then emptySlot = candidate break end
+            end
+            if not emptySlot then break end
+            turtle.select(emptySlot)
+            if not chestSuck() then break end
+            slot = findItemSlot("minecraft:bucket")
+            if not slot then
+                deferred[#deferred + 1] = emptySlot
+            end
         end
-        if not slot then break end
-        turtle.select(slot)
-        if not chestSuck() then break end
-        local item = turtle.getItemDetail(slot)
-        if item and item.name == "minecraft:bucket" then
-            if fillFromDrawer(slot) then
+        if slot then
+            local filled, filledSlot = fillFromDrawer(slot)
+            if filled then
                 refilled = refilled + 1
-                if not chestDrop() then fail("Bucket chest rejected a filled lava bucket") break end
+                turtle.select(filledSlot)
+                if not chestDrop(1) then fail("Bucket chest rejected a filled lava bucket") break end
             else
                 send({
                     type = "status",
@@ -225,11 +267,10 @@ local function refillBuckets()
                     fuel = turtle.getFuelLevel(),
                     active = true,
                 })
-                deferred[#deferred + 1] = slot
+                turtle.select(slot)
+                if not chestDrop(1) then fail("Bucket chest rejected an empty bucket") end
                 break
             end
-        else
-            deferred[#deferred + 1] = slot
         end
     end
     for _, slot in ipairs(deferred) do
