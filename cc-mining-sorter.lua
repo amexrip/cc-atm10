@@ -8,8 +8,6 @@ local PAIR_FILE = "quarry_station_id"
 local ROLE = "sorter"
 local LABEL = "Sorter Turtle"
 local INPUT_SIDE = "front"
-local FUEL_CHEST_SIDE = "left" -- side of the lava chest after the fuel route
-local FUEL_ROUTE = { left = 1, forward = 1, right = 1, finalForward = 3 }
 local FUEL_TRIGGER = 2000
 local FUEL_TARGET = 15000
 local halted = false
@@ -72,14 +70,6 @@ local function face(direction)
     end
 end
 
-local function sideDirection(side)
-    if side == "front" then return 0 end
-    if side == "right" then return 1 end
-    if side == "back" then return 2 end
-    if side == "left" then return 3 end
-    error("Invalid fuel chest side: " .. tostring(side))
-end
-
 local function fail(message)
     printError(message)
     halted = true
@@ -102,57 +92,51 @@ local function stepForward()
     return true
 end
 
-local function stepBackward()
-    turnRight()
-    turnRight()
-    local ok = stepForward()
-    turnRight()
-    turnRight()
-    return ok
+local function isChest(name)
+    return name and name:lower():find("chest", 1, true) ~= nil
 end
 
-local function strafeLeft()
-    turnLeft()
-    local ok = stepForward()
-    turnRight()
-    return ok
-end
-
-local function strafeRight()
-    turnRight()
-    local ok = stepForward()
-    turnLeft()
-    return ok
-end
-
-local function goToFuelChest()
-    -- Relative route from the sorting position:
-    -- left 1, forward 1, right 1, forward 3.
-    if not strafeLeft() then return false end
-    if not stepForward() then return false end
-    if not strafeRight() then return false end
-    for _ = 1, FUEL_ROUTE.finalForward do
-        if not stepForward() then return false end
+local function moveUntilFuelChest()
+    for _ = 1, 64 do
+        if turtle.forward() then
+            -- Keep moving until the next block is the fuel chest.
+        else
+            local ok, block = turtle.inspect()
+            if ok and block and isChest(block.name) then return true end
+            fail("Fuel chest was not found on the route")
+            return false
+        end
     end
-    return true
+    fail("Fuel chest route exceeded 64 blocks")
+    return false
 end
 
 local function returnFromFuelChest()
-    -- Reverse the route while preserving the original facing direction.
-    for _ = 1, FUEL_ROUTE.finalForward do
-        if not stepBackward() then return false end
-    end
-    if not strafeLeft() then return false end
-    if not stepBackward() then return false end
-    if not strafeRight() then return false end
+    -- Exact reverse: turn around, back 2, turn left, forward 1, turn left.
+    turnLeft()
+    turnLeft()
+    if not stepForward() then return false end
+    if not stepForward() then return false end
+    turnLeft()
+    if not stepForward() then return false end
+    turnLeft()
     return true
 end
 
 local function refuel()
     if turtle.getFuelLevel() == "unlimited" or turtle.getFuelLevel() >= FUEL_TARGET then return true end
-    if not goToFuelChest() then return false end
-    face(sideDirection(FUEL_CHEST_SIDE))
+    -- Exact route from the sorting position:
+    -- turn left, forward 1, turn right, forward 1, forward 1,
+    -- then forward until the chest is directly in front.
+    turnLeft()
+    if not stepForward() then return false end
+    turnRight()
+    if not stepForward() then return false end
+    if not stepForward() then return false end
+    if not moveUntilFuelChest() then return false end
+
     local deferred = {}
+    local empties = {}
     while turtle.getFuelLevel() < FUEL_TARGET do
         local slot
         for candidate = 1, 16 do
@@ -165,13 +149,19 @@ local function refuel()
         if item and item.name == "minecraft:lava_bucket" then
             if not turtle.refuel(1) then
                 fail("Lava bucket was not accepted as fuel")
+                deferred[#deferred + 1] = slot
                 break
             end
-            if not turtle.drop() then
-                fail("Fuel chest rejected an empty bucket")
-                break
-            end
+            empties[#empties + 1] = slot
         else
+            deferred[#deferred + 1] = slot
+        end
+    end
+
+    -- Return every empty bucket only after refueling is finished.
+    for _, slot in ipairs(empties) do
+        turtle.select(slot)
+        if not turtle.drop() then
             deferred[#deferred + 1] = slot
         end
     end
