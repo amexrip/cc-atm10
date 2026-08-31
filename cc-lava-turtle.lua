@@ -139,6 +139,53 @@ local function reportBuckets()
     })
 end
 
+local function turnBy(turns)
+    turns = turns % 4
+    if turns == 1 then
+        turtle.turnRight()
+    elseif turns == 2 then
+        turtle.turnRight()
+        turtle.turnRight()
+    elseif turns == 3 then
+        turtle.turnLeft()
+    end
+end
+
+local function drawerDirection()
+    if DRAWER_SIDE == "right" then return 1 end
+    if DRAWER_SIDE == "back" then return 2 end
+    if DRAWER_SIDE == "left" then return 3 end
+    return 0
+end
+
+local function fillFromDrawer(slot)
+    -- Try the configured side first, then the other horizontal sides. This
+    -- makes setup tolerant of the turtle being rotated beside the tower.
+    local first = drawerDirection()
+    local directions = { first }
+    for direction = 0, 3 do
+        local alreadyListed = false
+        for _, listed in ipairs(directions) do
+            if listed == direction then alreadyListed = true break end
+        end
+        if not alreadyListed then directions[#directions + 1] = direction end
+    end
+
+    local currentDirection = 0
+    for _, direction in ipairs(directions) do
+        turnBy(direction - currentDirection)
+        currentDirection = direction
+        local ok = turtle.place()
+        local item = turtle.getItemDetail(slot)
+        if ok and item and item.name == "minecraft:lava_bucket" then
+            turnBy(-currentDirection)
+            return true
+        end
+    end
+    turnBy(-currentDirection)
+    return false
+end
+
 local function refillBuckets()
     send({ type = "status", status = "Refilling buckets", task = "Filling buckets", fuel = turtle.getFuelLevel(), active = true })
     local deferred = {}
@@ -153,23 +200,17 @@ local function refillBuckets()
         if not chestSuck() then break end
         local item = turtle.getItemDetail(slot)
         if item and item.name == "minecraft:bucket" then
-            local ok
-            if DRAWER_SIDE == "front" then ok = turtle.place()
-            elseif DRAWER_SIDE == "back" then
-                -- The configured default is front; this branch is for unusual layouts.
-                turtle.turnLeft(); turtle.turnLeft()
-                ok = turtle.place()
-                turtle.turnLeft(); turtle.turnLeft()
-            elseif DRAWER_SIDE == "left" then
-                turtle.turnLeft(); ok = turtle.place(); turtle.turnRight()
-            else
-                turtle.turnRight(); ok = turtle.place(); turtle.turnLeft()
-            end
-            if ok and turtle.getItemDetail(slot) and turtle.getItemDetail(slot).name == "minecraft:lava_bucket" then
+            if fillFromDrawer(slot) then
                 refilled = refilled + 1
                 if not chestDrop() then fail("Bucket chest rejected a filled lava bucket") break end
             else
-                fail("Fluid drawer did not refill an empty bucket")
+                send({
+                    type = "status",
+                    status = "Waiting for lava in fluid drawer",
+                    task = "Filling buckets",
+                    fuel = turtle.getFuelLevel(),
+                    active = true,
+                })
                 deferred[#deferred + 1] = slot
                 break
             end
