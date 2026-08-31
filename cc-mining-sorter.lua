@@ -9,7 +9,7 @@ local ROLE = "sorter"
 local LABEL = "Sorter Turtle"
 local INPUT_SIDE = "front"
 local FUEL_CHEST_SIDE = "left" -- side of the lava chest after the fuel route
-local FUEL_ROUTE = { left = 1, forward = 1, right = 1, finalForward = 2 }
+local FUEL_ROUTE = { left = 1, forward = 1, right = 1, finalForward = 3 }
 local FUEL_TRIGGER = 2000
 local FUEL_TARGET = 15000
 local halted = false
@@ -127,7 +127,7 @@ end
 
 local function goToFuelChest()
     -- Relative route from the sorting position:
-    -- left 1, forward 1, right 1, forward 2.
+    -- left 1, forward 1, right 1, forward 3.
     if not strafeLeft() then return false end
     if not stepForward() then return false end
     if not strafeRight() then return false end
