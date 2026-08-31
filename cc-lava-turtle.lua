@@ -101,6 +101,33 @@ local function countItems(itemName)
     return count, firstSlot
 end
 
+local function inventorySnapshot()
+    local snapshot = {}
+    for slot = 1, 16 do
+        local item = turtle.getItemDetail(slot)
+        snapshot[slot] = {
+            name = item and item.name or nil,
+            count = item and item.count or 0,
+        }
+    end
+    return snapshot
+end
+
+local function findReceivedSlot(before)
+    for slot = 1, 16 do
+        local item = turtle.getItemDetail(slot)
+        local previous = before[slot]
+        if item and (
+            not previous.name
+            or previous.name ~= item.name
+            or item.count > previous.count
+        ) then
+            return slot
+        end
+    end
+    return nil
+end
+
 local function chestCounts()
     local chest = peripheral.wrap(BUCKET_CHEST_SIDE)
     if not chest or not chest.list then return "?", "?" end
@@ -194,7 +221,6 @@ end
 
 local function refillBuckets()
     send({ type = "status", status = "Refilling buckets", task = "Filling buckets", fuel = turtle.getFuelLevel(), active = true })
-    local deferred = {}
     local refilled = 0
     while true do
         local slot = findItemSlot("minecraft:bucket")
@@ -204,12 +230,20 @@ local function refillBuckets()
                 if turtle.getItemCount(candidate) == 0 then chestSlot = candidate break end
             end
             if not chestSlot then break end
+            local before = inventorySnapshot()
             turtle.select(chestSlot)
             if not chestSuck() then break end
-            -- Only process the item pulled into this slot. In particular,
-            -- do not let an existing empty bucket make a filled bucket from
-            -- the chest look like a refill candidate.
-            slot = chestSlot
+            slot = findReceivedSlot(before)
+            if not slot then
+                send({
+                    type = "status",
+                    status = "Could not identify chest item",
+                    task = "Filling buckets",
+                    fuel = turtle.getFuelLevel(),
+                    active = true,
+                })
+                break
+            end
         end
         if slot then
             local item = turtle.getItemDetail(slot)
@@ -232,13 +266,10 @@ local function refillBuckets()
                     break
                 end
             else
-                deferred[#deferred + 1] = slot
+                turtle.select(slot)
+                if not chestDrop() then fail("Bucket chest rejected an item") break end
             end
         end
-    end
-    for _, slot in ipairs(deferred) do
-        turtle.select(slot)
-        if not chestDrop() then fail("Bucket chest rejected an item") end
     end
     print("Refilled " .. refilled .. " buckets")
     reportBuckets()
