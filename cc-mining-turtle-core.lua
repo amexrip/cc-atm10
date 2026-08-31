@@ -267,6 +267,19 @@ local function moveUp()
     reportPosition("Changing layer")
 end
 
+local function descendThroughOpenShaft()
+    send({ type = "status", status = "Finding current quarry layer", task = "Descending", fuel = fuel(), active = true })
+    while true do
+        ensureFuel()
+        if turtle.down() then
+            pos.y = pos.y - 1
+            reportPosition("Descending through open shaft")
+        else
+            break
+        end
+    end
+end
+
 local function mineLayer()
     send({ type = "status", status = "Mining layer Y=" .. pos.y, task = "Mining layer", fuel = fuel(), active = true })
     for row = 0, SIZE - 1 do
@@ -286,9 +299,15 @@ local function mineLayer()
 end
 
 local function runQuarry()
+    -- On restart, the starting column is already open through completed
+    -- layers. Find the first solid layer without digging through old work.
+    descendThroughOpenShaft()
+    if not moveUpRaw() then fail("Cannot move up to the quarry layer") end
+    pos.y = pos.y + 1
+    reportPosition("Starting current quarry layer")
+
     local layers = 0
     while true do
-        -- Mine the current layer first, starting at the surface.
         mineLayer()
         layers = layers + 1
         goTo(0, pos.y, 0)

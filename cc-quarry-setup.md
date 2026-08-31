@@ -37,9 +37,11 @@ Start the mining turtle at one corner, facing into the quarry:
              (left)          (behind)
 ```
 
-The miner clears the starting/top 32x32 layer in a serpentine path, returns to
-the corner, moves down one layer, and repeats until bedrock. This clears every
-cell in the quarry area rather than only making tunnels.
+The starting column must be open through any already-completed layers. On
+startup or restart, the miner descends through that open shaft until it meets
+the current solid layer, moves up one layer, and mines a full 32x32 layer.
+It then returns to the corner, moves down one layer, and repeats toward
+bedrock. This avoids digging or travelling through completed layers.
 
 The miner returns to its start point when its inventory is full, drops into
 the unsorted chest behind it, then takes filled lava buckets from the left
