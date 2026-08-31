@@ -183,6 +183,20 @@ local function fillFromDrawer(slot)
         end
     end
     turnBy(-currentDirection)
+
+    -- A drawer tower may be one block above or below the turtle instead of
+    -- being level with it. The chest below normally makes placeDown fail
+    -- safely, but trying it keeps this routine compatible with either layout.
+    local ok = turtle.placeUp()
+    local item = turtle.getItemDetail(slot)
+    if ok and item and item.name == "minecraft:lava_bucket" then
+        return true
+    end
+    ok = turtle.placeDown()
+    item = turtle.getItemDetail(slot)
+    if ok and item and item.name == "minecraft:lava_bucket" then
+        return true
+    end
     return false
 end
 
