@@ -8,7 +8,8 @@ local PAIR_FILE = "quarry_station_id"
 local ROLE = "sorter"
 local LABEL = "Sorter Turtle"
 local INPUT_SIDE = "front"
-local FUEL_CHEST_SIDE = "left"
+local FUEL_CHEST_SIDE = "left" -- side of the lava chest after the fuel route
+local FUEL_ROUTE = { left = 1, forward = 1, right = 1, finalForward = 2 }
 local FUEL_TRIGGER = 2000
 local FUEL_TARGET = 15000
 local halted = false
@@ -93,8 +94,63 @@ local function deferredDrop(slots)
     return true
 end
 
+local function stepForward()
+    if not turtle.forward() then
+        fail("Blocked on route to fuel chest")
+        return false
+    end
+    return true
+end
+
+local function stepBackward()
+    turnRight()
+    turnRight()
+    local ok = stepForward()
+    turnRight()
+    turnRight()
+    return ok
+end
+
+local function strafeLeft()
+    turnLeft()
+    local ok = stepForward()
+    turnRight()
+    return ok
+end
+
+local function strafeRight()
+    turnRight()
+    local ok = stepForward()
+    turnLeft()
+    return ok
+end
+
+local function goToFuelChest()
+    -- Relative route from the sorting position:
+    -- left 1, forward 1, right 1, forward 2.
+    if not strafeLeft() then return false end
+    if not stepForward() then return false end
+    if not strafeRight() then return false end
+    for _ = 1, FUEL_ROUTE.finalForward do
+        if not stepForward() then return false end
+    end
+    return true
+end
+
+local function returnFromFuelChest()
+    -- Reverse the route while preserving the original facing direction.
+    for _ = 1, FUEL_ROUTE.finalForward do
+        if not stepBackward() then return false end
+    end
+    if not strafeLeft() then return false end
+    if not stepBackward() then return false end
+    if not strafeRight() then return false end
+    return true
+end
+
 local function refuel()
     if turtle.getFuelLevel() == "unlimited" or turtle.getFuelLevel() >= FUEL_TARGET then return true end
+    if not goToFuelChest() then return false end
     face(sideDirection(FUEL_CHEST_SIDE))
     local deferred = {}
     while turtle.getFuelLevel() < FUEL_TARGET do
@@ -121,7 +177,10 @@ local function refuel()
     end
     local ok = deferredDrop(deferred)
     face(0)
+    local returned = returnFromFuelChest()
+    face(0)
     if not ok then fail("Fuel chest rejected an item") end
+    if not returned then return false end
     if turtle.getFuelLevel() == "unlimited" or turtle.getFuelLevel() >= FUEL_TARGET then
         send({ type = "status", status = "Refueled", task = "Sorting", fuel = turtle.getFuelLevel(), active = true })
         return true

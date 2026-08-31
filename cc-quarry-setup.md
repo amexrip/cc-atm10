@@ -71,7 +71,8 @@ All eight destinations may be Sophisticated Storage Netherite chests. The
 sorter returns to chest 1 to take one stack, then travels along the row and
 drops the stack down into the selected chest. Set `FUEL_CHEST_SIDE` near the
 top of the sorter script if its lava-bucket chest is not on the turtle's
-left.
+left. When fuel is low, it travels from its sorting position left 1, forward
+1, right 1, and forward 2 to the fuel chest, then reverses that route.
 
 Categories are:
 
