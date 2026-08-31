@@ -176,11 +176,30 @@ local function colorFor(role)
     return colors.orange
 end
 
+local function displayLength(text)
+    local count = 0
+    for _ in tostring(text):gmatch("[^\128-\191][\128-\191]*") do
+        count = count + 1
+    end
+    return count
+end
+
+local function clipText(text, limit)
+    local output = {}
+    local count = 0
+    for character in tostring(text):gmatch("[^\128-\191][\128-\191]*") do
+        if count >= limit then break end
+        output[#output + 1] = character
+        count = count + 1
+    end
+    return table.concat(output)
+end
+
 local function writeAt(x, y, text, color)
-    local width = monitor.getSize()
-    if y < 1 then return end
+    local width, height = monitor.getSize()
+    if y < 1 or y > height then return end
     if x < 1 then x = 1 end
-    text = tostring(text):sub(1, math.max(0, width - x + 1))
+    text = clipText(text, math.max(0, width - x + 1))
     monitor.setCursorPos(x, y)
     monitor.setTextColor(color or colors.white)
     monitor.write(text)
@@ -202,20 +221,20 @@ end
 
 local function cardLine(x, y, width, text, color)
     local inner = width - 2
-    text = tostring(text):sub(1, math.max(0, inner - 2))
-    writeAt(x, y, "| " .. text .. string.rep(" ", math.max(0, inner - #text - 1)) .. "|", color)
+    text = clipText(text, math.max(0, inner - 2))
+    writeAt(x, y, "║ " .. text .. string.rep(" ", math.max(0, inner - displayLength(text) - 1)) .. "║", color)
 end
 
 local function drawCard(x, y, width, height, title, accent, lines)
     local inner = width - 2
-    writeAt(x, y, "+" .. string.rep("-", inner) .. "+", accent)
+    writeAt(x, y, "╔" .. string.rep("═", inner) .. "╗", accent)
     cardLine(x, y + 1, width, title, accent)
     for index, line in ipairs(lines) do
         if index + 1 < height then
             cardLine(x, y + index + 1, width, line.text, line.color)
         end
     end
-    writeAt(x, y + height - 1, "+" .. string.rep("-", inner) .. "+", accent)
+    writeAt(x, y + height - 1, "╚" .. string.rep("═", inner) .. "╝", accent)
 end
 
 local function draw()
@@ -236,7 +255,8 @@ local function draw()
     writeAt(math.max(2, math.floor((width - #title) / 2)), 1, title, colors.cyan)
     writeAt(2, 2, "STATION " .. os.getComputerID(), colors.lightGray)
     writeAt(math.max(2, width - 24), 2, "WIRELESS  /  READY", colors.lime)
-    writeAt(2, 3, string.rep("=", math.max(1, width - 3)), colors.blue)
+    local divider = "┌── ⋆⋅☆⋅⋆ ──┐"
+    writeAt(math.max(2, math.floor((width - 13) / 2)), 3, divider, colors.blue)
 
     local minerFuel = type(miner.fuel) == "number" and miner.fuel or nil
     local minerFuelMax = 50000
@@ -297,58 +317,59 @@ local function draw()
         writeAt(summaryWidth, summaryY + i, string.format("%d  %-18s  %d", i, cleanName(top[i].name, 18), top[i].count), colors.lightGray)
     end
 
-    local pickFrames = {
+    local bullFrames = {
         {
-            "       /\\",
-            "      /  \\",
-            "=====/____\\",
-            "       ||",
-            "       ||",
-            "      /  \\",
+            "(__)",
+            "(@@)_____",
+            "(OO)    /|\\",
+            "  | |--/ | *",
+            "  w w w  w",
         },
         {
-            "          /\\",
-            "         /  \\",
-            "========/____\\",
-            "          ||",
-            "         /||",
-            "        / ||",
+            "(__)",
+            "(??)_____",
+            "(oo)    /|\\",
+            "  | |--/ | *",
+            "  w w w  w",
         },
         {
-            "       /\\",
-            "      /  \\",
-            "=====/____\\",
-            "       ||",
-            "      /||",
-            "     / ||",
+            "(__)",
+            "(^^)_____",
+            "(OO)    /|\\",
+            "  | |--/ | *",
+            "  w w w  w",
         },
         {
-            "     /\\",
-            "    /  \\",
-            "===/____\\====",
-            "      ||",
-            "      ||",
-            "     /  \\",
+            "(__)",
+            "(--)_____",
+            "(oo)    /|\\",
+            "  | |--/ | *",
+            "  w w w  w",
+        },
+        {
+            "(__)",
+            "(** )_____",
+            "(OO)    /|\\",
+            "  | |--/ | *",
+            "  w w w  w",
+        },
+        {
+            "(__)",
+            "(^^)_____",
+            "(oo)    /|\\",
+            "  | |--/ | *",
+            "  w w w  w",
         },
     }
-    local rock = {
-        "   .------.",
-        "  /  ##  ## \\",
-        " |  ##  ##  |",
-        "  \\__##____/",
-    }
-    local frame = pickFrames[((animation - 1) % #pickFrames) + 1]
-    local px = math.max(1, width - 23)
-    local py = math.max(1, height - 8)
+    local frame = bullFrames[((animation - 1) % #bullFrames) + 1]
+    local px = math.max(1, width - 19)
+    local py = math.max(1, height - 7)
     for index, line in ipairs(frame) do
         writeAt(px, py + index - 1, line, colors.yellow)
     end
-    for index, line in ipairs(rock) do
-        writeAt(px + 13, py + index + 1, line, colors.gray)
-    end
     local systemState = (miner.active or sorter.active or lava.active) and "ACTIVE" or "IDLE"
     writeAt(2, height, "SYSTEM " .. systemState, colors.gray)
-    writeAt(math.max(2, width - 27), height, "PICKAXE LINK ACTIVE", colors.lime)
+    writeAt(math.max(2, width - 25), height, "BULL LINK ACTIVE", colors.lime)
 end
 
 local function roleFor(sender, msg)
