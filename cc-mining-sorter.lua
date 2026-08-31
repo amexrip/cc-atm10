@@ -320,10 +320,28 @@ local function processOne()
     return true
 end
 
+local function runFuelTest()
+    print("Testing sorter fuel route...")
+    print("Fuel before: " .. turtle.getFuelLevel())
+    local ok = refuel()
+    print("Fuel after: " .. turtle.getFuelLevel())
+    if ok then
+        print("Fuel test complete; returned to sorter position.")
+    else
+        printError("Fuel test failed.")
+    end
+end
+
 local function prepareForFuel()
     -- Return an in-hand item to the input chest before using slots for buckets.
     if turtle.getItemCount(1) > 0 then putBack(1) end
     return refuel()
+end
+
+local args = { ... }
+if args[1] == "testfuel" then
+    runFuelTest()
+    return
 end
 
 if not pair() then return end
