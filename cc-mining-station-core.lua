@@ -200,74 +200,101 @@ local function activityBar(active, width)
     return string.rep("-", marker - 1) .. "#" .. string.rep("-", width - marker)
 end
 
+local function cardLine(x, y, width, text, color)
+    local inner = width - 2
+    text = tostring(text):sub(1, math.max(0, inner - 2))
+    writeAt(x, y, "| " .. text .. string.rep(" ", math.max(0, inner - #text - 1)) .. "|", color)
+end
+
+local function drawCard(x, y, width, height, title, accent, lines)
+    local inner = width - 2
+    writeAt(x, y, "+" .. string.rep("-", inner) .. "+", accent)
+    cardLine(x, y + 1, width, title, accent)
+    for index, line in ipairs(lines) do
+        if index + 1 < height then
+            cardLine(x, y + index + 1, width, line.text, line.color)
+        end
+    end
+    writeAt(x, y + height - 1, "+" .. string.rep("-", inner) .. "+", accent)
+end
+
 local function draw()
     local width, height = monitor.getSize()
     monitor.setBackgroundColor(colors.black)
     monitor.clear()
 
-    local title = "ATM10 QUARRY CONTROL"
-    writeAt(math.max(1, math.floor((width - #title) / 2)), 1, title, colors.cyan)
-    writeAt(2, 2, "STATION " .. os.getComputerID() .. "   WIRELESS LINK: " .. PROTOCOL, colors.lightGray)
-
-    local roles = { "miner", "sorter", "lava" }
-    local panelWidth = math.max(20, math.floor((width - 2) / 3))
+    local miner = turtles.miner
+    local sorter = turtles.sorter
+    local lava = turtles.lava
+    local left = 2
+    local panelWidth = math.max(24, math.floor((width - 5) / 2))
+    local right = width - panelWidth - 1
     local panelTop = 4
-    local panelBottom = math.min(height - 9, panelTop + 17)
-    local innerWidth = panelWidth - 2
+    local panelHeight = math.min(15, math.max(12, height - 14))
 
-    for index, role in ipairs(roles) do
-        local t = turtles[role]
-        local x = (index - 1) * panelWidth + 2
-        local fuelNumber = type(t.fuel) == "number" and t.fuel or nil
-        local maximum = role == "miner" and 50000 or 15000
-        local statusColor = t.active and colors.lime or colors.gray
+    local title = "ATM10 // DEEP QUARRY"
+    writeAt(math.max(2, math.floor((width - #title) / 2)), 1, title, colors.cyan)
+    writeAt(2, 2, "STATION " .. os.getComputerID(), colors.lightGray)
+    writeAt(math.max(2, width - 24), 2, "WIRELESS  /  READY", colors.lime)
+    writeAt(2, 3, string.rep("=", math.max(1, width - 3)), colors.blue)
 
-        writeAt(x, panelTop, "+" .. string.rep("-", innerWidth) .. "+", colorFor(role))
-        writeAt(x, panelTop + 1, "| " .. string.upper(role) .. string.rep(" ", math.max(0, innerWidth - #role - 1)) .. "|", colorFor(role))
-        writeAt(x, panelTop + 2, "| " .. (t.active and "ONLINE" or "OFFLINE") .. string.rep(" ", math.max(0, innerWidth - 8)) .. "|", statusColor)
-        writeAt(x, panelTop + 3, "| ID " .. tostring(t.id or "-") .. string.rep(" ", math.max(0, innerWidth - 4 - #(t.id and tostring(t.id) or "-"))) .. "|", colors.lightGray)
-        writeAt(x, panelTop + 4, "| FUEL " .. tostring(t.fuel) .. string.rep(" ", math.max(0, innerWidth - 6 - #tostring(t.fuel))) .. "|", colors.lightBlue)
+    local minerFuel = type(miner.fuel) == "number" and miner.fuel or nil
+    local minerFuelMax = 50000
+    local minerTaskWidth = panelWidth - 6
+    local minerTask = miner.progress and bar(miner.progress, miner.progressMax or 100, minerTaskWidth)
+        or activityBar(miner.active, minerTaskWidth)
+    drawCard(left, panelTop, panelWidth, panelHeight, "MINER  /  QUARRY", colors.lime, {
+        { text = (miner.active and "ONLINE" or "OFFLINE") .. "    ID " .. (miner.id or "-"), color = miner.active and colors.lime or colors.gray },
+        { text = "FUEL  " .. tostring(miner.fuel), color = colors.lightBlue },
+        { text = "[" .. bar(minerFuel, minerFuelMax, minerTaskWidth) .. "]", color = minerFuel and (minerFuel < FUEL_WARN.miner and colors.red or colors.green) or colors.gray },
+        { text = "TASK  " .. cleanName(miner.task, panelWidth - 8), color = colors.white },
+        { text = "[" .. minerTask .. "]", color = miner.active and colors.lime or colors.gray },
+        { text = "ERROR " .. cleanName(miner.error, panelWidth - 8), color = miner.error ~= "-" and colors.red or colors.gray },
+        { text = "------------------------------", color = colors.gray },
+        { text = "BLOCKS  " .. miner.mined .. "     ORES  " .. miner.ores, color = colors.white },
+        { text = "POS     " .. miner.x .. "," .. miner.y .. "," .. miner.z, color = colors.lightBlue },
+        { text = "LAST    " .. cleanName(miner.lastBlock, panelWidth - 10), color = colors.lime },
+        { text = "ORE     " .. cleanName(miner.lastOre, panelWidth - 10), color = colors.orange },
+    })
 
-        local fuelWidth = math.max(8, innerWidth - 2)
-        local fuelBar = "[" .. bar(fuelNumber, maximum, fuelWidth) .. "]"
-        writeAt(x, panelTop + 5, "| " .. fuelBar .. string.rep(" ", math.max(0, innerWidth - #fuelBar - 1)) .. "|",
-            fuelNumber and (fuelNumber < FUEL_WARN[role] and colors.red or colors.green) or colors.gray)
-
-        local taskText = cleanName(t.task, innerWidth - 7)
-        writeAt(x, panelTop + 6, "| TASK: " .. taskText .. string.rep(" ", math.max(0, innerWidth - #taskText - 7)) .. "|", colors.white)
-        local taskWidth = math.max(8, innerWidth - 2)
-        local taskProgress = t.progress
-        local taskBar = taskProgress and bar(taskProgress, t.progressMax or 100, taskWidth) or activityBar(t.active, taskWidth)
-        writeAt(x, panelTop + 7, "| [" .. taskBar .. "]" .. string.rep(" ", math.max(0, innerWidth - taskWidth - 2)) .. "|", t.active and colorFor(role) or colors.gray)
-
-        local errorText = cleanName(t.error, innerWidth - 5)
-        writeAt(x, panelTop + 8, "| ERR " .. errorText .. string.rep(" ", math.max(0, innerWidth - #errorText - 5)) .. "|", t.error ~= "-" and colors.red or colors.gray)
-
-        if role == "miner" then
-            writeAt(x, panelTop + 10, "| BLOCKS " .. t.mined, colors.white)
-            writeAt(x, panelTop + 11, "| ORES   " .. t.ores, colors.orange)
-            writeAt(x, panelTop + 12, "| POS    " .. t.x .. "," .. t.y .. "," .. t.z, colors.lightBlue)
-            writeAt(x, panelTop + 13, "| LAST   " .. cleanName(t.lastBlock, innerWidth - 8), colors.lime)
-            writeAt(x, panelTop + 14, "| ORE    " .. cleanName(t.lastOre, innerWidth - 8), colors.orange)
-        elseif role == "lava" then
-            writeAt(x, panelTop + 10, "| FILLED " .. tostring(t.filled), colors.lime)
-            writeAt(x, panelTop + 11, "| EMPTY  " .. tostring(t.empty), colors.yellow)
+    local function compactLines(t, role, maximum)
+        local value = type(t.fuel) == "number" and t.fuel or nil
+        local taskWidth = panelWidth - 6
+        local task = t.progress and bar(t.progress, t.progressMax or 100, taskWidth)
+            or activityBar(t.active, taskWidth)
+        local lines = {
+            { text = (t.active and "ONLINE" or "OFFLINE") .. "    ID " .. (t.id or "-"), color = t.active and colors.lime or colors.gray },
+            { text = "FUEL  " .. tostring(t.fuel), color = colors.lightBlue },
+            { text = "[" .. bar(value, maximum, taskWidth) .. "]", color = value and (value < FUEL_WARN[role] and colors.red or colors.green) or colors.gray },
+            { text = "TASK  " .. cleanName(t.task, panelWidth - 8), color = colors.white },
+            { text = "[" .. task .. "]", color = t.active and colorFor(role) or colors.gray },
+            { text = "ERROR " .. cleanName(t.error, panelWidth - 8), color = t.error ~= "-" and colors.red or colors.gray },
+        }
+        if role == "lava" then
+            lines[6] = { text = "BUCKETS  F:" .. tostring(t.filled) .. "  E:" .. tostring(t.empty), color = colors.yellow }
+            lines[7] = { text = "ERROR " .. cleanName(t.error, panelWidth - 8), color = t.error ~= "-" and colors.red or colors.gray }
         end
-        writeAt(x, panelBottom, "+" .. string.rep("-", innerWidth) .. "+", colorFor(role))
+        return lines
     end
 
+    drawCard(right, panelTop, panelWidth, 9, "SORTER  /  STORAGE", colors.yellow, compactLines(sorter, "sorter", 15000))
+    drawCard(right, panelTop + 10, panelWidth, 9, "LAVA  /  BUCKET SUPPLY", colors.orange, compactLines(lava, "lava", 15000))
+
     local top = {}
-    for name, count in pairs(turtles.miner.top) do
+    for name, count in pairs(miner.top) do
         top[#top + 1] = { name = name, count = count }
     end
     table.sort(top, function(a, b) return a.count > b.count end)
-    local summaryY = panelBottom + 2
-    local right = math.floor(width * 0.58)
-    writeAt(2, summaryY, "ACTIVITY", colors.cyan)
-    writeAt(2, summaryY + 1, "Ores are announced through the station speaker.", colors.lightGray)
-    writeAt(right, summaryY, "TOP BLOCKS", colors.cyan)
-    for i = 1, math.min(5, #top) do
-        writeAt(right, summaryY + i, string.format("%d %-18s %d", i, cleanName(top[i].name, 18), top[i].count), colors.lightGray)
+    local summaryY = math.max(panelTop + panelHeight + 2, panelTop + 21)
+    local summaryHeight = math.max(5, height - summaryY - 2)
+    local summaryWidth = math.floor(width * 0.55)
+    writeAt(2, summaryY, "QUARRY SUMMARY", colors.cyan)
+    writeAt(2, summaryY + 1, "LAST BLOCK  " .. cleanName(miner.lastBlock, 22), colors.lightGray)
+    writeAt(2, summaryY + 2, "LAST ORE    " .. cleanName(miner.lastOre, 22), colors.orange)
+    writeAt(2, summaryY + 3, "ORE QUEUE   " .. #questionOrder .. " pending player decisions", colors.yellow)
+    writeAt(summaryWidth, summaryY, "TOP BLOCKS", colors.cyan)
+    for i = 1, math.min(5, #top, summaryHeight - 1) do
+        writeAt(summaryWidth, summaryY + i, string.format("%d  %-18s  %d", i, cleanName(top[i].name, 18), top[i].count), colors.lightGray)
     end
 
     local pick = { "  /\\", " /  ", "/___", "  ||" }
@@ -278,7 +305,8 @@ local function draw()
     writeAt(px + 5, py + 1, rock[1], colors.gray)
     writeAt(px + 5, py + 2, rock[2], colors.gray)
     writeAt(px + 5, py + 3, rock[3], colors.gray)
-    writeAt(2, height, "UNKNOWN ORE QUESTIONS: " .. #questionOrder, colors.yellow)
+    local systemState = (miner.active or sorter.active or lava.active) and "ACTIVE" or "IDLE"
+    writeAt(2, height, "SYSTEM " .. systemState, colors.gray)
     writeAt(math.max(2, width - 27), height, "PICKAXE LINK ACTIVE", colors.lime)
 end
 
