@@ -297,14 +297,55 @@ local function draw()
         writeAt(summaryWidth, summaryY + i, string.format("%d  %-18s  %d", i, cleanName(top[i].name, 18), top[i].count), colors.lightGray)
     end
 
-    local pick = { "  /\\", " /  ", "/___", "  ||" }
-    local rock = { " .--. ", "( oo )", " '--' " }
-    local px = math.max(1, width - 13)
-    local py = math.max(1, height - 5)
-    writeAt(px, py, pick[((animation - 1) % #pick) + 1], colors.yellow)
-    writeAt(px + 5, py + 1, rock[1], colors.gray)
-    writeAt(px + 5, py + 2, rock[2], colors.gray)
-    writeAt(px + 5, py + 3, rock[3], colors.gray)
+    local pickFrames = {
+        {
+            "       /\\",
+            "      /  \\",
+            "=====/____\\",
+            "       ||",
+            "       ||",
+            "      /  \\",
+        },
+        {
+            "          /\\",
+            "         /  \\",
+            "========/____\\",
+            "          ||",
+            "         /||",
+            "        / ||",
+        },
+        {
+            "       /\\",
+            "      /  \\",
+            "=====/____\\",
+            "       ||",
+            "      /||",
+            "     / ||",
+        },
+        {
+            "     /\\",
+            "    /  \\",
+            "===/____\\====",
+            "      ||",
+            "      ||",
+            "     /  \\",
+        },
+    }
+    local rock = {
+        "   .------.",
+        "  /  ##  ## \\",
+        " |  ##  ##  |",
+        "  \\__##____/",
+    }
+    local frame = pickFrames[((animation - 1) % #pickFrames) + 1]
+    local px = math.max(1, width - 23)
+    local py = math.max(1, height - 8)
+    for index, line in ipairs(frame) do
+        writeAt(px, py + index - 1, line, colors.yellow)
+    end
+    for index, line in ipairs(rock) do
+        writeAt(px + 13, py + index + 1, line, colors.gray)
+    end
     local systemState = (miner.active or sorter.active or lava.active) and "ACTIVE" or "IDLE"
     writeAt(2, height, "SYSTEM " .. systemState, colors.gray)
     writeAt(math.max(2, width - 27), height, "PICKAXE LINK ACTIVE", colors.lime)
