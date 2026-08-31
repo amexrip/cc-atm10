@@ -44,7 +44,7 @@ It then returns to the corner, moves down one layer, and repeats toward
 bedrock. This avoids digging or travelling through completed layers.
 
 The miner returns to its start point when its inventory is full and unloads
-into the unsorted chest behind or directly above it. It then takes filled lava
+into the unsorted chest behind, above, or below it. It then takes filled lava
 buckets from the left chest, converts each bucket into fuel, and returns every
 empty bucket to the fuel chest. Below 2,000 fuel it services itself and will
 not resume until it reaches 50,000 fuel.

@@ -226,16 +226,21 @@ local function dumpAtHome()
     if ok and block and isChest(block.name) then
         dropItem = turtle.drop
     else
-        -- The supplied spawn layout places the chest at Y=259 while the
-        -- turtle is at Y=258, so also support a chest directly above.
+        -- The miner can be one layer above or below the spawn chest after
+        -- aligning itself with the current quarry layer.
         local aboveOk, aboveBlock = turtle.inspectUp()
         if aboveOk and aboveBlock and isChest(aboveBlock.name) then
             dropItem = turtle.dropUp
+        else
+            local belowOk, belowBlock = turtle.inspectDown()
+            if belowOk and belowBlock and isChest(belowBlock.name) then
+                dropItem = turtle.dropDown
+            end
         end
     end
     if not dropItem then
         face(0)
-        fail("Unsorted chest not found behind or above the miner; refusing to drop inventory")
+        fail("Unsorted chest not found behind, above, or below the miner; refusing to drop inventory")
     end
     for slot = 1, 16 do
         turtle.select(slot)
