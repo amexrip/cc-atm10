@@ -256,7 +256,7 @@ local function draw()
     writeAt(2, 2, "STATION " .. os.getComputerID(), colors.lightGray)
     writeAt(math.max(2, width - 24), 2, "WIRELESS  /  READY", colors.lime)
     local divider = "┌── ⋆⋅☆⋅⋆ ──┐"
-    writeAt(math.max(2, math.floor((width - 13) / 2)), 3, divider, colors.blue)
+    writeAt(math.max(2, math.floor((width - displayLength(divider)) / 2)), 3, divider, colors.blue)
 
     local minerFuel = type(miner.fuel) == "number" and miner.fuel or nil
     local minerFuelMax = 50000
