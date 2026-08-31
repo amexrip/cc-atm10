@@ -106,7 +106,13 @@ local function fuelFromChest()
     if turtle.getFuelLevel() == "unlimited" or turtle.getFuelLevel() >= FUEL_TARGET then
         return true
     end
-    fail("No filled lava buckets available")
+    send({
+        type = "status",
+        status = "Waiting for filled lava buckets",
+        task = "Waiting for fuel",
+        fuel = turtle.getFuelLevel(),
+        active = true,
+    })
     return false
 end
 
@@ -181,10 +187,12 @@ end
 
 if not pair() then return end
 while not halted do
+    -- Filling buckets uses no movement fuel, so do this before the fuel check.
+    -- This also lets the turtle create its own fuel supply from empty buckets.
+    refillBuckets()
     if turtle.getFuelLevel() ~= "unlimited" and turtle.getFuelLevel() < FUEL_TRIGGER then
         if not fuelFromChest() then sleep(10) end
     else
-        refillBuckets()
         sleep(2)
     end
     reportBuckets()
