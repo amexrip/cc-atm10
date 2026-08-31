@@ -4,6 +4,7 @@ if fs.exists("cc-mining-turtle-core.lua") then
     dofile("cc-mining-turtle-core.lua")
     return
 end
+error("Missing cc-mining-turtle-core.lua. Download both miner files.")
 -- Quarry excavates a 32x32 area downward (same as: excavate 32)
 -- Reports mined blocks and ores to cc-mining-station.lua over rednet.
 

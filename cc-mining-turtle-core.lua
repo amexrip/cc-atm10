@@ -175,8 +175,9 @@ end
 local function returnDeferred(slots)
     for _, slot in ipairs(slots) do
         turtle.select(slot)
-        turtle.drop(64)
+        if not turtle.drop(64) then return false end
     end
+    return true
 end
 
 local function refuelFromChest()
