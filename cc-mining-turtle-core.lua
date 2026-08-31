@@ -186,24 +186,29 @@ end
 
 local function refuelFromChest()
     if fuel() == "unlimited" or fuel() >= FUEL_TARGET then return true end
-    face(sideDirection(FUEL_CHEST_SIDE))
     local suckFuel
     local dropEmpty
-    local ok, block = turtle.inspect()
-    if ok and block and isChest(block.name) then
-        suckFuel = turtle.suck
-        dropEmpty = turtle.drop
-    else
+    local originalSide = sideDirection(FUEL_CHEST_SIDE)
+    local sides = { originalSide, (originalSide + 2) % 4 }
+    for _, side in ipairs(sides) do
+        face(side)
+        local ok, block = turtle.inspect()
+        if ok and block and isChest(block.name) then
+            suckFuel = turtle.suck
+            dropEmpty = turtle.drop
+            break
+        end
         local aboveOk, aboveBlock = turtle.inspectUp()
         if aboveOk and aboveBlock and isChest(aboveBlock.name) then
             suckFuel = turtle.suckUp
             dropEmpty = turtle.dropUp
-        else
-            local belowOk, belowBlock = turtle.inspectDown()
-            if belowOk and belowBlock and isChest(belowBlock.name) then
-                suckFuel = turtle.suckDown
-                dropEmpty = turtle.dropDown
-            end
+            break
+        end
+        local belowOk, belowBlock = turtle.inspectDown()
+        if belowOk and belowBlock and isChest(belowBlock.name) then
+            suckFuel = turtle.suckDown
+            dropEmpty = turtle.dropDown
+            break
         end
     end
     if not suckFuel or not dropEmpty then
@@ -284,12 +289,8 @@ local function dumpAtHome()
             fail("Unsorted chest is full or missing")
         end
     end
-    if movedUpForChest then
-        face(0)
-        if not turtle.down() then fail("Cannot return to miner spawn height") end
-        pos.y = pos.y - 1
-    end
     face(0)
+    return movedUpForChest
 end
 
 local function goTo(targetX, targetY, targetZ)
@@ -392,7 +393,8 @@ local function runQuarry()
     end
     goTo(0, 0, 0)
     face(0)
-    dumpAtHome()
+    local raisedForChest = dumpAtHome()
+    if raisedForChest then goTo(0, 0, 0) end
     send({ type = "status", status = "Quarry complete after " .. layers .. " layers", task = "Complete", fuel = fuel(), active = false })
     print("32x32 quarry complete.")
 end
@@ -400,8 +402,9 @@ end
 if not pair() then return end
 if fuel() ~= "unlimited" and fuel() < FUEL_TRIGGER then
     -- At startup the turtle is already at home, so this does not need navigation.
-    dumpAtHome()
+    local raisedForChest = dumpAtHome()
     if not refuelFromChest() then fail("No filled lava buckets available at startup") end
+    if raisedForChest then goTo(0, 0, 0) end
 end
 send({ type = "status", status = "Starting 32x32 quarry", task = "Starting", fuel = fuel(), active = true })
 runQuarry()
