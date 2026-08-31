@@ -267,6 +267,13 @@ local function moveUp()
     reportPosition("Changing layer")
 end
 
+local function tryDown()
+    ensureFuel()
+    if not moveDownRaw() then return false end
+    reportPosition("Changing layer")
+    return true
+end
+
 local function descendThroughOpenShaft()
     send({ type = "status", status = "Finding current quarry layer", task = "Descending", fuel = fuel(), active = true })
     while true do
