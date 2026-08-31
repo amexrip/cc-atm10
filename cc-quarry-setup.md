@@ -103,9 +103,9 @@ CC:Tweaked right-click/use action for filling an empty bucket. It does not use
 `turtle.dig()`, so it will not break the drawer.
 
 The turtle takes empty buckets from the chest below, fills them one at a time,
-and returns filled lava buckets to that same chest. It also uses filled lava
-buckets from that chest for fuel below 2,000 and stops refueling at 15,000.
-Set `DRAWER_SIDE` or `BUCKET_CHEST_SIDE` in the lava script if your layout is
+and returns filled lava buckets to that same chest for the miner and sorter.
+This stationary turtle does not consume the filled buckets for fuel. Set
+`DRAWER_SIDE` or `BUCKET_CHEST_SIDE` in the lava script if your layout is
 different.
 
 ## Installation

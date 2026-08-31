@@ -9,8 +9,6 @@ local ROLE = "lava"
 local LABEL = "Lava Bucket Turtle"
 local BUCKET_CHEST_SIDE = "bottom"
 local DRAWER_SIDE = "front"
-local FUEL_TRIGGER = 2000
-local FUEL_TARGET = 15000
 local halted = false
 
 local modem
@@ -101,46 +99,6 @@ local function countItems(itemName)
         end
     end
     return count, firstSlot
-end
-
-local function fuelFromChest()
-    if turtle.getFuelLevel() == "unlimited" or turtle.getFuelLevel() >= FUEL_TARGET then return true end
-    send({ type = "status", status = "Refueling", task = "Refueling", fuel = turtle.getFuelLevel(), active = true })
-    local deferred = {}
-    while turtle.getFuelLevel() < FUEL_TARGET do
-        local slot
-        for candidate = 1, 16 do
-            if turtle.getItemCount(candidate) == 0 then slot = candidate break end
-        end
-        if not slot then break end
-        turtle.select(slot)
-        if not chestSuck() then break end
-        local item = turtle.getItemDetail(slot)
-        if item and item.name == "minecraft:lava_bucket" then
-            if not turtle.refuel(1) then
-                fail("Lava bucket was not accepted as fuel")
-                break
-            end
-            if not chestDrop() then fail("Bucket chest rejected an empty bucket") break end
-        else
-            deferred[#deferred + 1] = slot
-        end
-    end
-    for _, slot in ipairs(deferred) do
-        turtle.select(slot)
-        if not chestDrop() then fail("Bucket chest rejected a non-fuel item") end
-    end
-    if turtle.getFuelLevel() == "unlimited" or turtle.getFuelLevel() >= FUEL_TARGET then
-        return true
-    end
-    send({
-        type = "status",
-        status = "Waiting for filled lava buckets",
-        task = "Waiting for fuel",
-        fuel = turtle.getFuelLevel(),
-        active = true,
-    })
-    return false
 end
 
 local function chestCounts()
@@ -241,35 +199,40 @@ local function refillBuckets()
     while true do
         local slot = findItemSlot("minecraft:bucket")
         if not slot then
-            local emptySlot
+            local chestSlot
             for candidate = 1, 16 do
-                if turtle.getItemCount(candidate) == 0 then emptySlot = candidate break end
+                if turtle.getItemCount(candidate) == 0 then chestSlot = candidate break end
             end
-            if not emptySlot then break end
-            turtle.select(emptySlot)
+            if not chestSlot then break end
+            turtle.select(chestSlot)
             if not chestSuck() then break end
-            slot = findItemSlot("minecraft:bucket")
-            if not slot then
-                deferred[#deferred + 1] = emptySlot
-            end
+            -- Only process the item pulled into this slot. In particular,
+            -- do not let an existing empty bucket make a filled bucket from
+            -- the chest look like a refill candidate.
+            slot = chestSlot
         end
         if slot then
-            local filled, filledSlot = fillFromDrawer(slot)
-            if filled then
-                refilled = refilled + 1
-                turtle.select(filledSlot)
-                if not chestDrop(1) then fail("Bucket chest rejected a filled lava bucket") break end
+            local item = turtle.getItemDetail(slot)
+            if item and item.name == "minecraft:bucket" then
+                local filled, filledSlot = fillFromDrawer(slot)
+                if filled then
+                    refilled = refilled + 1
+                    turtle.select(filledSlot)
+                    if not chestDrop(1) then fail("Bucket chest rejected a filled lava bucket") break end
+                else
+                    send({
+                        type = "status",
+                        status = "Waiting for lava in fluid drawer",
+                        task = "Filling buckets",
+                        fuel = turtle.getFuelLevel(),
+                        active = true,
+                    })
+                    turtle.select(slot)
+                    if not chestDrop(1) then fail("Bucket chest rejected an empty bucket") end
+                    break
+                end
             else
-                send({
-                    type = "status",
-                    status = "Waiting for lava in fluid drawer",
-                    task = "Filling buckets",
-                    fuel = turtle.getFuelLevel(),
-                    active = true,
-                })
-                turtle.select(slot)
-                if not chestDrop(1) then fail("Bucket chest rejected an empty bucket") end
-                break
+                deferred[#deferred + 1] = slot
             end
         end
     end
@@ -283,13 +246,9 @@ end
 
 if not pair() then return end
 while not halted do
-    -- Filling buckets uses no movement fuel, so do this before the fuel check.
-    -- This also lets the turtle create its own fuel supply from empty buckets.
+    -- This turtle never travels, so it must not consume the filled buckets
+    -- it produces from the shared chest.
     refillBuckets()
-    if turtle.getFuelLevel() ~= "unlimited" and turtle.getFuelLevel() < FUEL_TRIGGER then
-        if not fuelFromChest() then sleep(10) end
-    else
-        sleep(2)
-    end
+    sleep(2)
     reportBuckets()
 end
