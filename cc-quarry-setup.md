@@ -43,11 +43,11 @@ the current solid layer, moves up one layer, and mines a full 32x32 layer.
 It then returns to the corner, moves down one layer, and repeats toward
 bedrock. This avoids digging or travelling through completed layers.
 
-The miner returns to its start point when its inventory is full, drops into
-the unsorted chest behind it, then takes filled lava buckets from the left
-chest. It converts each bucket into fuel and returns every empty bucket to the
-fuel chest. Below 2,000 fuel it services itself and will not resume until it
-reaches 50,000 fuel.
+The miner returns to its start point when its inventory is full and unloads
+into the unsorted chest behind or directly above it. It then takes filled lava
+buckets from the left chest, converts each bucket into fuel, and returns every
+empty bucket to the fuel chest. Below 2,000 fuel it services itself and will
+not resume until it reaches 50,000 fuel.
 
 The miner tracks position relative to its starting point. Do not move or
 rotate it while it is running. Keep enough fuel buckets available to cover
