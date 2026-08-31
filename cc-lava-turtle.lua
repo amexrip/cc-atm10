@@ -1,5 +1,5 @@
 -- Wireless lava-bucket refill turtle for CC:Tweaked.
--- Start facing the fluid drawer tower. The bucket chest is below the turtle.
+-- Start facing the Mekanism fluid tank. The bucket chest is below the turtle.
 -- turtle.place() is used: this is the safe right-click/use action.
 
 local PROTOCOL = "atm10_quarry_v2"
@@ -8,7 +8,6 @@ local PAIR_FILE = "quarry_station_id"
 local ROLE = "lava"
 local LABEL = "Lava Bucket Turtle"
 local BUCKET_CHEST_SIDE = "bottom"
-local DRAWER_SIDE = "front"
 local halted = false
 
 local modem
@@ -151,67 +150,12 @@ local function reportBuckets()
     })
 end
 
-local function turnBy(turns)
-    turns = turns % 4
-    if turns == 1 then
-        turtle.turnRight()
-    elseif turns == 2 then
-        turtle.turnRight()
-        turtle.turnRight()
-    elseif turns == 3 then
-        turtle.turnLeft()
-    end
-end
-
-local function drawerDirection()
-    if DRAWER_SIDE == "right" then return 1 end
-    if DRAWER_SIDE == "back" then return 2 end
-    if DRAWER_SIDE == "left" then return 3 end
-    return 0
-end
-
-local function fillFromDrawer(slot)
-    -- Try the configured side first, then the other horizontal sides. This
-    -- makes setup tolerant of the turtle being rotated beside the tower.
-    local first = drawerDirection()
-    local directions = { first }
-    for direction = 0, 3 do
-        local alreadyListed = false
-        for _, listed in ipairs(directions) do
-            if listed == direction then alreadyListed = true break end
-        end
-        if not alreadyListed then directions[#directions + 1] = direction end
-    end
-
+local function fillFromTank(slot)
+    -- The Mekanism tank must be directly in front of the turtle.
     local filledBefore = countItems("minecraft:lava_bucket")
-    local currentDirection = 0
-    for _, direction in ipairs(directions) do
-        turnBy(direction - currentDirection)
-        currentDirection = direction
-        turtle.select(slot)
-        local ok = turtle.place()
-        local filledAfter, filledSlot = countItems("minecraft:lava_bucket")
-        if ok and filledAfter > filledBefore then
-            turtle.select(filledSlot)
-            turnBy(-currentDirection)
-            return true, filledSlot
-        end
-    end
-    turnBy(-currentDirection)
-
-    -- A drawer tower may be one block above or below the turtle instead of
-    -- being level with it. The chest below normally makes placeDown fail
-    -- safely, but trying it keeps this routine compatible with either layout.
     turtle.select(slot)
-    local ok = turtle.placeUp()
+    local ok = turtle.place()
     local filledAfter, filledSlot = countItems("minecraft:lava_bucket")
-    if ok and filledAfter > filledBefore then
-        turtle.select(filledSlot)
-        return true, filledSlot
-    end
-    turtle.select(slot)
-    ok = turtle.placeDown()
-    filledAfter, filledSlot = countItems("minecraft:lava_bucket")
     if ok and filledAfter > filledBefore then
         turtle.select(filledSlot)
         return true, filledSlot
@@ -248,7 +192,7 @@ local function refillBuckets()
         if slot then
             local item = turtle.getItemDetail(slot)
             if item and item.name == "minecraft:bucket" then
-                local filled, filledSlot = fillFromDrawer(slot)
+                local filled, filledSlot = fillFromTank(slot)
                 if filled then
                     refilled = refilled + 1
                     turtle.select(filledSlot)
@@ -256,7 +200,7 @@ local function refillBuckets()
                 else
                     send({
                         type = "status",
-                        status = "Waiting for lava in fluid drawer",
+                        status = "Waiting for lava in fluid tank",
                         task = "Filling buckets",
                         fuel = turtle.getFuelLevel(),
                         active = true,
@@ -268,6 +212,9 @@ local function refillBuckets()
             else
                 turtle.select(slot)
                 if not chestDrop() then fail("Bucket chest rejected an item") break end
+                -- Do not keep pulling filled buckets from the shared chest.
+                -- Wait for another turtle to return an empty bucket.
+                break
             end
         end
     end

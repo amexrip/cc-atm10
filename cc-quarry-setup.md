@@ -97,16 +97,15 @@ to one player.
 
 ## Lava turtle placement
 
-Start the lava turtle facing the fluid drawer tower, with the bucket chest
-directly below it. It uses `turtle.place()` against the drawer, which is the
+Start the lava turtle facing the Mekanism fluid tank, with the bucket chest
+directly below it. It uses `turtle.place()` against the tank, which is the
 CC:Tweaked right-click/use action for filling an empty bucket. It does not use
-`turtle.dig()`, so it will not break the drawer.
+`turtle.dig()`, so it will not break the tank.
 
 The turtle takes empty buckets from the chest below, fills them one at a time,
 and returns filled lava buckets to that same chest for the miner and sorter.
 This stationary turtle does not consume the filled buckets for fuel. Set
-`DRAWER_SIDE` or `BUCKET_CHEST_SIDE` in the lava script if your layout is
-different.
+`BUCKET_CHEST_SIDE` in the lava script if your chest is not below the turtle.
 
 ## Installation
 
