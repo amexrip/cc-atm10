@@ -267,21 +267,6 @@ local function moveUp()
     reportPosition("Changing layer")
 end
 
-local function descendToBottom()
-    send({ type = "status", status = "Descending to bottom", task = "Descending", fuel = fuel(), active = true })
-    while true do
-        ensureFuel()
-        if turtle.down() then
-            pos.y = pos.y - 1
-            reportPosition("Descending")
-        elseif digDown() then
-            sleep(0.1)
-        else
-            break
-        end
-    end
-end
-
 local function mineLayer()
     send({ type = "status", status = "Mining layer Y=" .. pos.y, task = "Mining layer", fuel = fuel(), active = true })
     for row = 0, SIZE - 1 do
@@ -301,20 +286,24 @@ local function mineLayer()
 end
 
 local function runQuarry()
-    descendToBottom()
-    local bottom = pos.y
+    local layers = 0
     while true do
+        -- Mine the current layer first, starting at the surface.
         mineLayer()
+        layers = layers + 1
         goTo(0, pos.y, 0)
         face(0)
-        if pos.y >= 0 then break end
-        moveUp()
+        if not tryDown() then break end
         if inventoryFull() then serviceCurrentPosition() end
+    end
+
+    while pos.y < 0 do
+        if not tryUp() then fail("Cannot return to surface") end
     end
     goTo(0, 0, 0)
     face(0)
     dumpAtHome()
-    send({ type = "status", status = "Quarry complete at Y=" .. bottom, task = "Complete", fuel = fuel(), active = false })
+    send({ type = "status", status = "Quarry complete after " .. layers .. " layers", task = "Complete", fuel = fuel(), active = false })
     print("32x32 quarry complete.")
 end
 
